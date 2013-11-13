@@ -20,9 +20,7 @@
 from gfw import forma
 
 import json
-import logging
 import os
-import urllib
 import webapp2
 
 # True if executing on dev server:
@@ -33,41 +31,48 @@ DATE_REGEX = r'(19|20)\d\d[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])'
 
 # Path to get aggregated FORMA alerts for supplied ISO.
 # /{iso}/{startdate}/{enddate} where dates are in the form yyyy-mm-dd.
-FORMA_STATIC = r'/api/v1/defor/analyze/forma/iso/<:\w{3,3}>/<:%s>/<:%s>' % (DATE_REGEX, DATE_REGEX)
+FORMA_ISO = r'/api/v1/defor/analyze/forma/iso/<:\w{3,3}>/<:%s>/<:%s>' \
+    % (DATE_REGEX, DATE_REGEX)
 
-# Path to get aggregated defor values by dataset for dynamic polygon as GeoJSON:
-ANALYZE_DYNAMIC_POLY = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' % (DATE_REGEX, DATE_REGEX)
+# Path for aggregated defor values by dataset for dynamic polygon as GeoJSON:
+FORMA_GEOJSON = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' \
+    % (DATE_REGEX, DATE_REGEX)
 
 # API routes:
 routes = [
-    webapp2.Route(FORMA_STATIC, handler='gfw.api.AnalyzeApi:forma_counts_static'),
-    webapp2.Route(ANALYZE_DYNAMIC_POLY, handler='gfw.api.AnalyzeApi:forma_counts_dynamic'),    
+    webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
+    webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
 ]
+
 
 class AnalyzeApi(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
-    def forma_counts_static(self, iso, start_date, end_date):
-        """Return aggregated FORMA alert count for supplied ISO and dates.""" 
+    def forma_iso(self, iso, start_date, end_date):
+        """Return FORMA alert count for supplied ISO and dates."""
         count = forma.get_alerts_by_iso(iso, start_date, end_date)
-        result = {'units': 'alerts', 'value': count, 'value_display': format(count, ",d")}
+        result = {'units': 'alerts', 'value': count,
+                  'value_display': format(count, ",d")}
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
-    
-    def forma_counts_dynamic(self, start_date, end_date):
-        """Return aggregated FORMA alert count for supplied dates and geojson polygon."""
+
+    def forma_geojson(self, start_date, end_date):
+        """Return FORMA alert count for supplied dates and geojson polygon."""
         geojson = json.loads(self.request.get('q'))
         count = forma.get_alerts_by_geojson(geojson, start_date, end_date)
-        result = {'units': 'alerts', 'value': count, 'value_display': format(count, ",d")}
+        result = {'units': 'alerts', 'value': count,
+                  'value_display': format(count, ",d")}
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
 
+
 class DownloadApi(webapp2.RequestHandler):
-    pass # TODO
+    pass
+
 
 class SubscribeApi(webapp2.RequestHandler):
-    pass # TODO
+    pass
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
