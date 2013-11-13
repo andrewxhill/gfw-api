@@ -48,12 +48,20 @@ routes = [
 class AnalyzeApi(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
+    def options(self):
+        self.response.headers['Access-Control-Allow-Origin'] = '*'
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
+        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
     def forma_iso(self, iso, start_date, end_date):
         """Return FORMA alert count for supplied ISO and dates."""
         count = forma.get_alerts_by_iso(iso, start_date, end_date)
         result = {'units': 'alerts', 'value': count,
                   'value_display': format(count, ",d")}
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
@@ -65,6 +73,8 @@ class AnalyzeApi(webapp2.RequestHandler):
         result = {'units': 'alerts', 'value': count,
                   'value_display': format(count, ",d")}
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
