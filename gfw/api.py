@@ -53,6 +53,7 @@ class AnalyzeApi(webapp2.RequestHandler):
         count = forma.get_alerts_by_iso(iso, start_date, end_date)
         result = {'units': 'alerts', 'value': count,
                   'value_display': format(count, ",d")}
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
@@ -63,6 +64,7 @@ class AnalyzeApi(webapp2.RequestHandler):
         count = forma.get_alerts_by_geojson(geojson, start_date, end_date)
         result = {'units': 'alerts', 'value': count,
                   'value_display': format(count, ",d")}
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
         self.response.out.headers['Content-Type'] = 'application/json'
         self.response.headers['charset'] = 'utf-8'
         self.response.out.write(json.dumps(result))
