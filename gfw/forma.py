@@ -30,7 +30,7 @@ FORMA_TABLE = 'cdm_2013_11_08'
 
 # Query template for number of FORMA alerts by ISO and start/end dates.
 # (table, iso, start, end)
-AGG_ISO_SQL = """SELECT SUM(count)
+ISO_SQL = """SELECT SUM(count)
 FROM
   (SELECT COUNT(*) AS count, iso, date
    FROM %s
@@ -42,7 +42,7 @@ FROM
 
 # Query template for FORMA alert count by GeoJSON polygon and start/end dates.
 # (table, start, end, geojson)
-AGG_GEOJSON_SQL = """SELECT SUM(count)
+GEOJSON_SQL = """SELECT SUM(count)
 FROM
   (SELECT COUNT(*) AS count, iso, date
    FROM %s
@@ -69,12 +69,11 @@ def _execute(query):
 
 def get_alerts_by_iso(iso, start, end):
     """Return aggregated alert count for supplied iso and start/end dates."""
-    query = AGG_ISO_SQL % (FORMA_TABLE, iso.upper(), start, end)
+    query = ISO_SQL % (FORMA_TABLE, iso.upper(), start, end)
     return _execute(query)['rows'][0]['sum']
 
 
 def get_alerts_by_geojson(geojson, start, end):
     """Return FORMA alert count for supplied geojson and start/end dates."""
-    query = AGG_GEOJSON_SQL % (FORMA_TABLE, start, end, json.dumps(geojson))
-    logging.info(geojson)
+    query = GEOJSON_SQL % (FORMA_TABLE, start, end, json.dumps(geojson))
     return _execute(query)['rows'][0]['sum']
