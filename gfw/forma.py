@@ -18,15 +18,10 @@
 """This module supports accessing FORMA data."""
 
 import json
-import logging
-import urllib
-from google.appengine.api import urlfetch
-
-# CartoDB endpoint:
-ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
+from gfw import cdb
 
 # FORMA table in CDM:
-FORMA_TABLE = 'cdm_2013_11_08'
+FORMA_TABLE = 'cdm_latest'
 
 # Query template for number of FORMA alerts by ISO and start/end dates.
 # (table, iso, start, end)
@@ -53,27 +48,13 @@ FROM
    ORDER BY iso, date) AS alias"""
 
 
-def _execute(query):
-    """Exectues supplied query on CartoDB and returns response body as JSON."""
-    rpc = urlfetch.create_rpc(deadline=60)
-    url = '%s?%s' % (ENDPOINT, urllib.urlencode(dict(q=query)))
-    logging.info(url)
-    urlfetch.make_fetch_call(rpc, url)
-    try:
-        result = rpc.get_result()
-        if result.status_code == 200:
-            return json.loads(result.content)
-    except urlfetch.DownloadError:
-        logging.error("Error logging API - %s" % (query))
-
-
 def get_alerts_by_iso(iso, start, end):
     """Return aggregated alert count for supplied iso and start/end dates."""
     query = ISO_SQL % (FORMA_TABLE, iso.upper(), start, end)
-    return _execute(query)['rows'][0]['sum']
+    return cdb.execute(query)['rows'][0]['sum']
 
 
 def get_alerts_by_geojson(geojson, start, end):
     """Return FORMA alert count for supplied geojson and start/end dates."""
     query = GEOJSON_SQL % (FORMA_TABLE, start, end, json.dumps(geojson))
-    return _execute(query)['rows'][0]['sum']
+    return cdb.execute(query)['rows'][0]['sum']
