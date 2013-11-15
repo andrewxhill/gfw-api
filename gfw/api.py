@@ -41,8 +41,7 @@ FORMA_GEOJSON = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' \
 
 # Imazon defor value in BRA poly or GeoJSON for supplied date range.
 # Note: Only data for 2008-2012
-IMAZON = r'/api/v1/defor/analyze/imazon/<:%s>/<:%s>' \
-    % (DATE_REGEX, DATE_REGEX)
+IMAZON = r'/api/v1/defor/analyze/imazon'
 
 # API routes:
 routes = [
@@ -71,15 +70,15 @@ class AnalyzeApi(webapp2.RequestHandler):
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
-    def imazon(self, start_date, end_date):
+    def imazon(self):
         """Return Imazon alert count for BRA or supplied GeoJSON poly."""
         try:
             geojson = json.loads(self.request.get('q'))
         except:
             geojson = None
-        count = imazon.get_defor(start_date, end_date, geojson=geojson)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
+        total_area = imazon.get_defor(geojson=geojson)
+        result = {'units': 'meters', 'value': total_area,
+                  'value_display': format(total_area, ",f")}
         self._send_response(result)
 
     def forma_iso(self, iso, start_date, end_date):

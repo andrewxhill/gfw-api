@@ -20,30 +20,24 @@
 import json
 from gfw import cdb
 
-# Query template for defor by years for all of BRA:
-ALL_SQL = """SELECT SUM(total)
-FROM
-  (SELECT ano, count(*) as total
-   FROM imazon_sad_desmatame
-   WHERE date(ano || '-12-31') >= date('%s')
-         AND date(ano || '-01-01') <= date('%s')
-   GROUP BY ano) AS alias"""
+ALL_SQL = """SELECT SUM(ST_Area(the_geom::geography))
+AS total_area
+FROM sad_polygons_fixed_2
+WHERE ST_ISvalid(the_geom)"""
 
-# Query template for defor by years for a GeoJSON polygon:
-GEOJSON_SQL = """SELECT SUM(total)
-FROM
-  (SELECT ano, count(*) as total
-   FROM imazon_sad_desmatame
-   WHERE date(ano || '-12-31') >= date('%s')
-         AND date(ano || '-01-01') <= date('%s')
-         AND ST_Intersects(the_geom,ST_SetSRID(ST_GeomFromGeoJSON('%s'), 4326))
-   GROUP BY ano) AS alias"""
+GEOJSON_SQL = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
+  ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326)::geography)))
+AS total_area
+FROM sad_polygons_fixed_2
+WHERE ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326) && the_geom
+  AND ST_ISvalid(the_geom)"""
 
 
-def get_defor(start, end, geojson=None):
+def get_defor(geojson=None):
     """ """
     if geojson:
-        query = GEOJSON_SQL % (start, end, json.dumps(geojson))
+        poly = json.dumps(geojson)
+        query = GEOJSON_SQL % (poly, poly)
     else:
-        query = ALL_SQL % (start, end)
-    return cdb.execute(query)['rows'][0]['sum']
+        query = ALL_SQL
+    return cdb.execute(query)['rows'][0]['total_area']
