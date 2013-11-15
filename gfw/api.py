@@ -19,6 +19,7 @@
 
 from gfw import forma
 from gfw import imazon
+from gfw import modis
 
 import json
 import os
@@ -39,6 +40,9 @@ FORMA_ISO = r'/api/v1/defor/analyze/forma/iso/<:\w{3,3}>/<:%s>/<:%s>' \
 FORMA_GEOJSON = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' \
     % (DATE_REGEX, DATE_REGEX)
 
+MODIS_ISO = r'/api/v1/defor/analyze/modis/iso/<:\w{3,3}>/<:%s>' % DATE_REGEX
+MODIS_GEOJSON = r'/api/v1/defor/analyze/modis/<:%s>' % DATE_REGEX
+
 # Imazon defor value in BRA poly or GeoJSON for supplied date range.
 # Note: Only data for 2008-2012
 IMAZON = r'/api/v1/defor/analyze/imazon'
@@ -48,6 +52,8 @@ routes = [
     webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
     webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
     webapp2.Route(IMAZON, handler='gfw.api.AnalyzeApi:imazon'),
+    webapp2.Route(MODIS_ISO, handler='gfw.api.AnalyzeApi:modis_iso'),
+    webapp2.Route(MODIS_GEOJSON, handler='gfw.api.AnalyzeApi:modis_geojson'),
 ]
 
 
@@ -71,7 +77,7 @@ class AnalyzeApi(webapp2.RequestHandler):
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
     def imazon(self):
-        """Return Imazon alert count for BRA or supplied GeoJSON poly."""
+        """Return Imazon values for BRA or supplied GeoJSON poly."""
         try:
             geojson = json.loads(self.request.get('q'))
         except:
@@ -79,6 +85,21 @@ class AnalyzeApi(webapp2.RequestHandler):
         total_area = imazon.get_defor(geojson=geojson)
         result = {'units': 'meters', 'value': total_area,
                   'value_display': format(total_area, ",f")}
+        self._send_response(result)
+
+    def modis_iso(self, iso, date):
+        """Return MODIS count for supplied ISO and date."""
+        count = modis.get_count_by_iso(iso, date)
+        result = {'units': 'count', 'value': count,
+                  'value_display': format(count, ",d")}
+        self._send_response(result)
+
+    def modis_geojson(self, date):
+        """Return MODIS count for supplied date and geojson polygon."""
+        geojson = json.loads(self.request.get('q'))
+        count = modis.get_count_by_geojson(geojson, date)
+        result = {'units': 'alerts', 'value': count,
+                  'value_display': format(count, ",d")}
         self._send_response(result)
 
     def forma_iso(self, iso, start_date, end_date):
