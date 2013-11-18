@@ -20,24 +20,50 @@
 import json
 from gfw import cdb
 
+ALL_GEOM_SQL = """SELECT the_geom, SUM(ST_Area(the_geom::geography))
+AS value, 'Imazon' as name, 'meters' as units
+FROM sad_polygons_fixed_2
+WHERE ST_ISvalid(the_geom)
+GROUP BY the_geom"""
+
 ALL_SQL = """SELECT SUM(ST_Area(the_geom::geography))
-AS total_area
+AS value, 'Imazon' as name, 'meters' as units
 FROM sad_polygons_fixed_2
 WHERE ST_ISvalid(the_geom)"""
 
 GEOJSON_SQL = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
   ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326)::geography)))
-AS total_area
+AS value, 'Imazon' as name, 'meters' as units
 FROM sad_polygons_fixed_2
 WHERE ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326) && the_geom
   AND ST_ISvalid(the_geom)"""
 
+GEOJSON_GEOM_SQL = """SELECT the_geom,
+SUM(ST_Area(ST_Intersection(the_geom::geography,
+  ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326)::geography)))
+AS value, 'Imazon' as name, 'meters' as units
+FROM sad_polygons_fixed_2
+WHERE ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326) && the_geom
+  AND ST_ISvalid(the_geom)
+GROUP BY the_geom"""
 
-def get_defor(geojson=None):
+
+def analyze(fmt, **params):
     """ """
-    if geojson:
-        poly = json.dumps(geojson)
-        query = GEOJSON_SQL % (poly, poly)
+    is_geo = fmt not in ['application/vnd.gfw+json',
+                         'application/vnd.gfw.csv+json']
+    geom = params.get('geom')
+    if geom:
+        if is_geo:
+            query = GEOJSON_GEOM_SQL % (geom, geom)
+        else:
+            query = GEOJSON_SQL % (geom, geom)
     else:
-        query = ALL_SQL
-    return cdb.execute(query)['rows'][0]['total_area']
+        if is_geo:
+            query = ALL_GEOM_SQL
+        else:
+            query = ALL_SQL
+    result = cdb.execute(query, fmt)
+    if fmt in ['application/vnd.gfw+json', 'application/vnd.gfw.geojson+json']:
+        result = json.dumps(json.loads(result)['rows'][0])
+    return result

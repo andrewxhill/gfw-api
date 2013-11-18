@@ -17,13 +17,17 @@
 
 """This module contains API request handlers for Global Forest Watch."""
 
+from gfw import cache
 from gfw import forma
 from gfw import imazon
 from gfw import modis
 
 import json
+import logging
 import os
 import webapp2
+
+# application/vnd.gfw+json
 
 # True if executing on dev server:
 IS_DEV = os.environ.get('SERVER_SOFTWARE', '').startswith('Dev')
@@ -45,29 +49,59 @@ MODIS_GEOJSON = r'/api/v1/defor/analyze/modis/<:%s>' % DATE_REGEX
 
 # Imazon defor value in BRA poly or GeoJSON for supplied date range.
 # Note: Only data for 2008-2012
-IMAZON = r'/api/v1/defor/analyze/imazon'
+IMAZON = r'/api/dataset/imazon'
 
 # API routes:
 routes = [
+    webapp2.Route(r'/api/dataset/imazon', handler='gfw.api.Handler:imazon'),
+
     webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
     webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
-    webapp2.Route(IMAZON, handler='gfw.api.AnalyzeApi:imazon'),
     webapp2.Route(MODIS_ISO, handler='gfw.api.AnalyzeApi:modis_iso'),
     webapp2.Route(MODIS_GEOJSON, handler='gfw.api.AnalyzeApi:modis_geojson'),
 ]
 
 
-class AnalyzeApi(webapp2.RequestHandler):
+CONTENT_TYPES = {
+    'application/vnd.gfw+json': 'application/json',
+    'application/vnd.gfw.geojson+json': 'application/json',
+    'application/vnd.gfw.csv+json': 'application/csv',
+    'application/vnd.gfw.svg+json': 'image/svg+xml',
+    'application/vnd.gfw.kml+json': 'application/vnd.google-earth.kmz',
+    'application/vnd.gfw.shp+json': 'application/octet-stream'
+
+}
+
+
+class Handler(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
-    def _send_response(self, result):
+    def _send_response(self, data):
         """Sends supplied result dictionnary as JSON response."""
+        self.response.headers.add_header("X-GFW-Media-Type",
+                                         str(data.media_type))
+        self.response.headers.add_header("Content-Type",
+                                         CONTENT_TYPES[data.media_type])
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
-        self.response.headers['Access-Control-Allow-Headers'] = \
-            'Origin, X-Requested-With, Content-Type, Accept'
-        self.response.out.headers['Content-Type'] = 'application/json'
-        self.response.headers['charset'] = 'utf-8'
-        self.response.out.write(json.dumps(result))
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.response.headers.add_header('charset', 'utf-8')
+        self.response.out.write(data.value)
+
+    def _get_gfw_media_type(self):
+        mt = self.request.headers['Accept']
+        if not mt:
+            mt = 'application/vnd.gfw+json'
+        else:
+            mt = filter(lambda x: x.startswith('application/vnd.gfw'),
+                        mt.split(','))
+            if not mt:
+                mt = 'application/vnd.gfw+json'
+            else:
+                mt = mt[0]
+        logging.info('HEADER:Accept %s' % mt)
+        return mt
 
     def options(self):
         """Options to support CORS requests."""
@@ -77,15 +111,16 @@ class AnalyzeApi(webapp2.RequestHandler):
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
     def imazon(self):
-        """Return Imazon values for BRA or supplied GeoJSON poly."""
-        try:
-            geojson = json.loads(self.request.get('q'))
-        except:
-            geojson = None
-        total_area = imazon.get_defor(geojson=geojson)
-        result = {'units': 'meters', 'value': total_area,
-                  'value_display': format(total_area, ",f")}
-        self._send_response(result)
+        """Return Imazon values."""
+        geom = self.request.get('geom')
+        path = self.request.path
+        mt = self._get_gfw_media_type()
+        data = cache.hit(path, mt, geom=geom)
+        if not data:
+            value = imazon.analyze(mt, geom=geom)
+            logging.info("VALUE %s" % type(value))
+            data = cache.update(path, mt, value, geom=geom)
+        self._send_response(data)
 
     def modis_iso(self, iso, date):
         """Return MODIS count for supplied ISO and date."""

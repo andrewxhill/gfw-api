@@ -17,7 +17,6 @@
 
 """This module supports executing CartoDB queries."""
 
-import json
 import logging
 import urllib
 from google.appengine.api import urlfetch
@@ -26,15 +25,28 @@ from google.appengine.api import urlfetch
 ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
 
 
-def execute(query):
+def get_format(media_type):
+    """Return CartoDB format for supplied GFW custorm media type."""
+    tokens = media_type.split('.')
+    if len(tokens) == 2:
+        return ''
+    else:
+        return tokens[2].split('+')[0]
+
+
+def execute(query, format, **params):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
     rpc = urlfetch.create_rpc(deadline=60)
-    url = '%s?%s' % (ENDPOINT, urllib.urlencode(dict(q=query)))
+    params['q'] = query
+    format = get_format(format)
+    if format:
+        params['format'] = format
+    url = '%s?%s' % (ENDPOINT, urllib.urlencode(params))
     logging.info(url)
     urlfetch.make_fetch_call(rpc, url)
     try:
         result = rpc.get_result()
         if result.status_code == 200:
-            return json.loads(result.content)
+            return result.content
     except urlfetch.DownloadError, e:
         logging.error("CartoDB SQL API Error: %s %s" % (e, query))
