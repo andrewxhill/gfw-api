@@ -19,28 +19,12 @@
 
 import json
 
+from gfw.common import CONTENT_TYPES
+from gfw.common import get_cartodb_format
+from gfw.common import GCS_URL_TMPL
 from gfw import gcs
 from hashlib import md5
 from google.appengine.ext import ndb
-
-CONTENT_TYPES = {
-    'application/vnd.gfw+json': 'application/json',
-    'application/vnd.gfw.geojson+json': 'application/json',
-    'application/vnd.gfw.csv+json': 'application/csv',
-    'application/vnd.gfw.svg+json': 'image/svg+xml',
-    'application/vnd.gfw.kml+json': 'application/vnd.google-earth.kmz',
-    'application/vnd.gfw.shp+json': 'application/octet-stream'
-
-}
-
-
-def get_format(media_type):
-    """Return CartoDB format for supplied GFW custorm media type."""
-    tokens = media_type.split('.')
-    if len(tokens) == 2:
-        return 'json'
-    else:
-        return tokens[2].split('+')[0]
 
 
 class Cache(ndb.Model):
@@ -49,11 +33,12 @@ class Cache(ndb.Model):
     request = ndb.StringProperty()
     value = ndb.BlobProperty()
     media_type = ndb.StringProperty()
+    download = ndb.ComputedProperty(lambda self: self.value.startswith('http'))
 
     @classmethod
     def get_id(cls, path, mt, params):
         phash = md5(json.dumps(params, sort_keys=True)).hexdigest()
-        return '/'.join([path.lower(), get_format(mt), phash])
+        return '/'.join([path.lower(), get_cartodb_format(mt), phash])
 
     @classmethod
     def get_or_insert(cls, path, mt, params={}, value=None):
@@ -75,7 +60,10 @@ def update(path, mt, value, **params):
                         'application/vnd.gfw.csv+json']
     if is_geo:
         content_type = CONTENT_TYPES[mt]
-        value = gcs.create_file(value, id, content_type, mt)
-    entry = Cache(id=id, request=id, value=value, media_type=mt)
+        gcs.create_file(value, id, content_type, mt)
+        url = GCS_URL_TMPL % (id, get_cartodb_format(mt))
+        entry = Cache(id=id, request=id, value=url, media_type=mt)
+    else:
+        entry = Cache(id=id, request=id, value=value, media_type=mt)
     entry.put()
     return entry

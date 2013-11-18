@@ -21,6 +21,7 @@ from gfw import cache
 from gfw import forma
 from gfw import imazon
 from gfw import modis
+from gfw.common import CONTENT_TYPES
 
 import json
 import logging
@@ -62,17 +63,6 @@ routes = [
 ]
 
 
-CONTENT_TYPES = {
-    'application/vnd.gfw+json': 'application/json',
-    'application/vnd.gfw.geojson+json': 'application/json',
-    'application/vnd.gfw.csv+json': 'application/csv',
-    'application/vnd.gfw.svg+json': 'image/svg+xml',
-    'application/vnd.gfw.kml+json': 'application/vnd.google-earth.kmz',
-    'application/vnd.gfw.shp+json': 'application/octet-stream'
-
-}
-
-
 class Handler(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
@@ -87,7 +77,10 @@ class Handler(webapp2.RequestHandler):
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
-        self.response.out.write(data.value)
+        if data.download:
+            self.redirect(data.value)
+        else:
+            self.response.out.write(data.value)
 
     def _get_gfw_media_type(self):
         mt = self.request.headers['Accept']

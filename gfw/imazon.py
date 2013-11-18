@@ -64,6 +64,6 @@ def analyze(fmt, **params):
         else:
             query = ALL_SQL
     result = cdb.execute(query, fmt)
-    if fmt in ['application/vnd.gfw+json', 'application/vnd.gfw.geojson+json']:
+    if fmt in ['application/vnd.gfw+json']:
         result = json.dumps(json.loads(result)['rows'][0])
     return result
