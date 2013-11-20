@@ -65,5 +65,6 @@ def analyze(fmt, **params):
             query = ALL_SQL
     result = cdb.execute(query, fmt)
     if fmt in ['application/vnd.gfw+json']:
-        result = json.dumps(json.loads(result)['rows'][0])
+        if result:
+            result = json.loads(result)['rows'][0]
     return result

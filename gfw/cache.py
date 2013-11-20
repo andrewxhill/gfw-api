@@ -18,12 +18,14 @@
 """This module supports caching API results."""
 
 import json
+import logging
 
 from gfw.common import CONTENT_TYPES
 from gfw.common import get_cartodb_format
 from gfw.common import GCS_URL_TMPL
 from gfw import gcs
 from hashlib import md5
+from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 
 
@@ -33,7 +35,10 @@ class Cache(ndb.Model):
     request = ndb.StringProperty()
     value = ndb.BlobProperty()
     media_type = ndb.StringProperty()
-    download = ndb.ComputedProperty(lambda self: self.value.startswith('http'))
+    params = ndb.JsonProperty()
+    gcskey = ndb.BlobKeyProperty()
+    download = ndb.ComputedProperty(
+        lambda self: self.value and self.value.startswith('http'))
 
     @classmethod
     def get_id(cls, path, mt, params):
@@ -60,9 +65,14 @@ def update(path, mt, value, **params):
                         'application/vnd.gfw.csv+json']
     if is_geo:
         content_type = CONTENT_TYPES[mt]
-        gcs.create_file(value, id, content_type, mt)
-        url = GCS_URL_TMPL % (id, get_cartodb_format(mt))
-        entry = Cache(id=id, request=id, value=url, media_type=mt)
+        ext = get_cartodb_format(mt)
+        filename = '.'.join([id, ext])
+        path = gcs.create_file(value, filename, content_type, mt)
+        gcskey = blobstore.create_gs_key(path)
+        key = blobstore.BlobInfo.get(gcskey).key()
+        url = GCS_URL_TMPL % (id, ext)
+        entry = Cache(id=id, request=id, value=url, media_type=mt,
+                      gcskey=key)
     else:
         entry = Cache(id=id, request=id, value=value, media_type=mt)
     entry.put()

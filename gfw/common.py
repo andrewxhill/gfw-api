@@ -17,6 +17,8 @@
 
 """This module supports common functions."""
 
+import os
+
 CONTENT_TYPES = {
     'application/vnd.gfw+json': 'application/json',
     'application/vnd.gfw.geojson+json': 'application/json',
@@ -26,8 +28,23 @@ CONTENT_TYPES = {
     'application/vnd.gfw.shp+json': 'application/octet-stream'
 }
 
+MEDIA_TYPES = {
+    'shp': 'application/vnd.gfw.shp+json',
+    'kml': 'application/vnd.gfw.kml+json',
+    'svg': 'application/vnd.gfw.svg+json',
+    'csv': 'application/vnd.gfw.csv+json',
+    'geojson': 'application/vnd.gfw.geojson+json'
+}
+
 
 GCS_URL_TMPL = 'http://storage.googleapis.com/gfw-apis-analysis%s.%s'
+
+IS_DEV = 'Development' in os.environ['SERVER_SOFTWARE']
+
+if IS_DEV:
+    APP_BASE_URL = 'http://localhost:8080'
+else:
+    APP_BASE_URL = 'http://gfw-apis.appspot.com'
 
 
 def get_cartodb_format(gfw_media_type):

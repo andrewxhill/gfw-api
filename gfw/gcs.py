@@ -45,4 +45,4 @@ def create_file(value, filename, content_type, media_type):
                         options={})
     gcs_file.write(value)
     gcs_file.close()
-    return path
+    return '/gs%s' % path

@@ -22,10 +22,15 @@ from gfw import forma
 from gfw import imazon
 from gfw import modis
 from gfw.common import CONTENT_TYPES
+from gfw.common import APP_BASE_URL
+from gfw.common import MEDIA_TYPES
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
 
 import json
 import logging
 import os
+import urllib
 import webapp2
 
 # application/vnd.gfw+json
@@ -51,10 +56,12 @@ MODIS_GEOJSON = r'/api/v1/defor/analyze/modis/<:%s>' % DATE_REGEX
 # Imazon defor value in BRA poly or GeoJSON for supplied date range.
 # Note: Only data for 2008-2012
 IMAZON = r'/api/dataset/imazon'
+IMAZON_DOWNLOAD = r'/api/dataset/imazon<:\.(shp|geojson|kml|svg|csv)?.*>'
 
 # API routes:
 routes = [
-    webapp2.Route(r'/api/dataset/imazon', handler='gfw.api.Handler:imazon'),
+    webapp2.Route(IMAZON, handler='gfw.api.Handler:imazon'),
+    webapp2.Route(IMAZON_DOWNLOAD, handler='gfw.api.DownloadHandler:imazon'),
 
     webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
     webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
@@ -63,20 +70,37 @@ routes = [
 ]
 
 
+class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
+    def imazon(self, foo):
+        geom = self.request.get('geom')
+        path = self.request.path
+        format = path.split('.')[1]
+        mt = MEDIA_TYPES[format]
+        data = cache.hit(path, mt, geom=geom)
+        if not data:
+            value = imazon.analyze(mt, geom=geom)
+            data = cache.update(path, mt, value, geom=geom)
+        blob_info = blobstore.BlobInfo.get(data.gcskey)
+        self.send_blob(blob_info)
+
+
 class Handler(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
     def _send_response(self, data):
         """Sends supplied result dictionnary as JSON response."""
-        self.response.headers.add_header("X-GFW-Media-Type",
-                                         str(data.media_type))
-        self.response.headers.add_header("Content-Type",
-                                         CONTENT_TYPES[data.media_type])
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
         self.response.headers.add_header(
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
+        if not data:
+            self.response.set_status(204)
+            return
+        self.response.headers.add_header("X-GFW-Media-Type",
+                                         str(data.media_type))
+        self.response.headers.add_header("Content-Type",
+                                         CONTENT_TYPES[data.media_type])
         if data.download:
             self.redirect(data.value)
         else:
@@ -93,7 +117,6 @@ class Handler(webapp2.RequestHandler):
                 mt = 'application/vnd.gfw+json'
             else:
                 mt = mt[0]
-        logging.info('HEADER:Accept %s' % mt)
         return mt
 
     def options(self):
@@ -104,15 +127,29 @@ class Handler(webapp2.RequestHandler):
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
     def imazon(self):
-        """Return Imazon values."""
         geom = self.request.get('geom')
         path = self.request.path
         mt = self._get_gfw_media_type()
         data = cache.hit(path, mt, geom=geom)
         if not data:
+            logging.info('MISS')
+            if geom:
+                geome = '?%s' % urllib.urlencode(dict(geom=geom))
+            else:
+                geome = ''
             value = imazon.analyze(mt, geom=geom)
+            if value:
+                value['shp_url'] = '%s%s.shp%s' % (APP_BASE_URL, IMAZON, geome)
+                value['geojson_url'] = '%s%s.geojson%s' % \
+                    (APP_BASE_URL, IMAZON, geome)
+                value['kml_url'] = '%s%s.kml%s' % (APP_BASE_URL, IMAZON, geome)
+                value['svg_url'] = '%s%s.svg%s' % (APP_BASE_URL, IMAZON, geome)
+                value['csv_url'] = '%s%s.csv%s' % (APP_BASE_URL, IMAZON, geome)
+                value = json.dumps(value)
+                data = cache.update(path, mt, value, geom=geom)
             logging.info("VALUE %s" % type(value))
-            data = cache.update(path, mt, value, geom=geom)
+        else:
+            logging.info('HIT %s' % path)
         self._send_response(data)
 
     def modis_iso(self, iso, date):
