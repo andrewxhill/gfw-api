@@ -29,7 +29,9 @@ from google.appengine.ext.webapp import blobstore_handlers
 
 import json
 import logging
+import md5
 import os
+import re
 import urllib
 import webapp2
 
@@ -56,7 +58,8 @@ MODIS_GEOJSON = r'/api/v1/defor/analyze/modis/<:%s>' % DATE_REGEX
 # Imazon defor value in BRA poly or GeoJSON for supplied date range.
 # Note: Only data for 2008-2012
 IMAZON = r'/api/dataset/imazon'
-IMAZON_DOWNLOAD = r'/api/dataset/imazon<:\.(shp|geojson|kml|svg|csv)?.*>'
+# IMAZON_DOWNLOAD = r'/api/dataset/imazon<:\.(shp|geojson|kml|svg|csv)?.*>'
+IMAZON_DOWNLOAD = r'/api/dataset/imazon/<:.*\.(shp|geojson|kml|svg|csv)>'
 
 # API routes:
 routes = [
@@ -72,16 +75,18 @@ routes = [
 
 class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
     def imazon(self, foo):
-        geom = self.request.get('geom')
-        path = self.request.path
-        format = path.split('.')[1]
+        geomhex = foo.split('.')[0]
+        geom = cache.Geom.get_by_id(geomhex)
+        if not geom:
+            self.error(404)
+            return
+        path, format = self.request.path.split('.')
         mt = MEDIA_TYPES[format]
-        data = cache.hit(path, mt, geom=geom)
+        data = cache.hit(path, mt, geom=geomhex)
         if not data:
-            value = imazon.analyze(mt, geom=geom)
-            data = cache.update(path, mt, value, geom=geom)
-        blob_info = blobstore.BlobInfo.get(data.gcskey)
-        self.send_blob(blob_info)
+            value = imazon.analyze(mt, geom=geom.geom)
+            data = cache.update(path, mt, value, geom=geomhex)
+        self.send_blob(data.gcskey)
 
 
 class Handler(webapp2.RequestHandler):
@@ -95,7 +100,7 @@ class Handler(webapp2.RequestHandler):
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
         if not data:
-            self.response.set_status(204)
+            self.response.out.write('{}')
             return
         self.response.headers.add_header("X-GFW-Media-Type",
                                          str(data.media_type))
@@ -127,26 +132,28 @@ class Handler(webapp2.RequestHandler):
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
     def imazon(self):
-        geom = self.request.get('geom')
         path = self.request.path
+        geom = self.request.get('geom')
+        geomhex = md5.new(geom).hexdigest() if geom else ''
+        if geomhex:
+            cache.Geom(id=geomhex, geom=geom).put()
+            download_url = '%s%s/%s{.extension}' % \
+                (APP_BASE_URL, path, geomhex)
+        else:
+            download_url = '%s%s{.extension}' % (APP_BASE_URL, path)
+        #q = urllib.unquote(geom.encode('ascii')).decode('utf-8')
+        # params = 'geom=' + urllib.quote(
+        #     re.sub(re.compile(u'\s+'), '', q).encode('utf-8'))
+        # query = '?' + params if params else ''
         mt = self._get_gfw_media_type()
-        data = cache.hit(path, mt, geom=geom)
+        data = cache.hit(path, mt, geom=geomhex)
         if not data:
-            logging.info('MISS')
-            if geom:
-                geome = '?%s' % urllib.urlencode(dict(geom=geom))
-            else:
-                geome = ''
             value = imazon.analyze(mt, geom=geom)
             if value:
-                value['shp_url'] = '%s%s.shp%s' % (APP_BASE_URL, IMAZON, geome)
-                value['geojson_url'] = '%s%s.geojson%s' % \
-                    (APP_BASE_URL, IMAZON, geome)
-                value['kml_url'] = '%s%s.kml%s' % (APP_BASE_URL, IMAZON, geome)
-                value['svg_url'] = '%s%s.svg%s' % (APP_BASE_URL, IMAZON, geome)
-                value['csv_url'] = '%s%s.csv%s' % (APP_BASE_URL, IMAZON, geome)
+                value['url'] = '%s%s' % (APP_BASE_URL, path)
+                value['download_url'] = download_url
                 value = json.dumps(value)
-                data = cache.update(path, mt, value, geom=geom)
+                data = cache.update(path, mt, value, geom=geomhex)
             logging.info("VALUE %s" % type(value))
         else:
             logging.info('HIT %s' % path)

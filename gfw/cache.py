@@ -29,6 +29,10 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 
 
+class Geom(ndb.Model):
+    geom = ndb.TextProperty()
+
+
 class Cache(ndb.Model):
     """A simple Cache moodel."""
 
@@ -36,7 +40,7 @@ class Cache(ndb.Model):
     value = ndb.BlobProperty()
     media_type = ndb.StringProperty()
     params = ndb.JsonProperty()
-    gcskey = ndb.BlobKeyProperty()
+    gcskey = ndb.StringProperty()
     download = ndb.ComputedProperty(
         lambda self: self.value and self.value.startswith('http'))
 
@@ -69,10 +73,10 @@ def update(path, mt, value, **params):
         filename = '.'.join([id, ext])
         path = gcs.create_file(value, filename, content_type, mt)
         gcskey = blobstore.create_gs_key(path)
-        key = blobstore.BlobInfo.get(gcskey).key()
+        logging.info('PATH %s KEY %s' % (path, gcskey))
         url = GCS_URL_TMPL % (id, ext)
         entry = Cache(id=id, request=id, value=url, media_type=mt,
-                      gcskey=key)
+                      gcskey=gcskey)
     else:
         entry = Cache(id=id, request=id, value=value, media_type=mt)
     entry.put()
