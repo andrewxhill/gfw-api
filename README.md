@@ -1,6 +1,94 @@
-# What is GFW API?
+# Global Forest Watch API
 
-[Global Forest Watch](http://www.wri.org/our-work/project/global-forest-watch) (GFW) is a powerful, near-real-time forest monitoring system that unites satellite technology, data sharing, and human networks around the world to fight deforestation. This repository contains the GFW API.
+This document describes the official Global Forest Watch API.
+
+
+The API supports analyzing and downloading entire datasets or specific regions of datasets. Regions are specified using a polygon id (country name for example) or a GeoJSON polygon. Supported download formats include Shapefile, GeoJSON, SVG, KML, and CSV. The API is accessed over HTTP from `gfw-apis.appspot.com` and all data is sent and received as JSON. It is hypermedia-enabled which means it supports [URI templates](http://tools.ietf.org/html/rfc6570) for programatically constructing related API endpoints.
+
+
+## Imazon examples
+
+```
+GET /api/datasets/imazon
+```
+
+```json
+{
+   "units":"meters",
+   "url":"http://gfw-apis.appspot.com/api/datasets/imazon",
+   "download_url":"http://gfw-apis.appspot.com/api/datasets/imazon{.extension}",
+   "name":"Imazon",
+   "value":24936257111.998199
+}
+```
+
+To download these results, check out the `download_url` property in the above response object. That's a URI template that can be expanded programatically into a download link for any desired format:
+
+```ruby
+# Ruby: https://github.com/hannesg/uri_template
+tmpl = URITemplate.new(download_url)
+tmpl.expand :extension => "svg"
+"http://gfw-apis.appspot.com/api/datasets/imazon.svg"
+```
+
+```javascript
+// JavaScript: https://github.com/fxa/uritemplate-js
+var tmpl = UriTemplate.parse(download_url);
+tmpl.expand({extension: 'shp'});
+"http://gfw-apis.appspot.com/api/datasets/imazon.shp"
+```
+
+Now let's analyze the Imazon dataset withing a GeoJSON polygon using the following URL parameters:
+
+Parameter | Type | Description 
+-----|------|--------------
+geom | string | GeoJSON polygon
+
+Given a GeoJSON polygon:
+
+```json
+{
+   "type":"Polygon",
+   "coordinates":[
+      [
+         [
+            -56.4697265625,
+            -0.7470491450051796
+         ],
+         [
+            -57.3486328125,
+            -5.266007882805485
+         ],
+         [
+            -51.240234375,
+            -7.318881730366743
+         ],
+         [
+            -53.78906249999999,
+            -0.39550467153200675
+         ],
+         [
+            -56.4697265625,
+            -0.7470491450051796
+         ]
+      ]
+   ]
+}
+```
+
+We can analyze Imazon within the polygon and get this:
+
+```json
+{
+   "units":"meters",
+   "url":"http://gfw-apis.appspot.com/api/datasets/imazon",
+   "download_url":"http://gfw-apis.appspot.com/api/datasets/imazon/7b5c75cd70282377e94e4ca3a90c20b4{.extension}",
+   "name":"Imazon",
+   "value":1058591613.291
+}
+```
+
+Again notice the `download_url` template which can be expanded for download URLs in any desired format.
 
 
 # Developing
