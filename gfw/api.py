@@ -22,6 +22,7 @@ import logging
 import re
 import webapp2
 
+from gfw import cdb
 from gfw import forma
 from gfw import imazon
 from gfw import gcs
@@ -54,6 +55,7 @@ def download(dataset, params):
 
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
 
 
 class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
@@ -87,8 +89,8 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
             self.error(404)
 
 
-class AnalyzeApi(webapp2.RequestHandler):
-    """Handler for aggregated defor values for supplied dataset and polygon."""
+class BaseApi(webapp2.RequestHandler):
+    """Base request handler for API."""
 
     def _send_response(self, data):
         """Sends supplied result dictionnary as JSON response."""
@@ -103,17 +105,21 @@ class AnalyzeApi(webapp2.RequestHandler):
         self.response.headers.add_header("Content-Type", "application/json")
         self.response.out.write(data)
 
-    def _get_id(self, params):
-        whitespace = re.compile(r'\s+')
-        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
-        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
-
     def options(self):
         """Options to support CORS requests."""
         self.response.headers['Access-Control-Allow-Origin'] = '*'
         self.response.headers['Access-Control-Allow-Headers'] = \
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+
+class AnalyzeApi(BaseApi):
+    """Handler for aggregated defor values for supplied dataset and polygon."""
+
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
 
     def analyze(self, dataset):
         args = self.request.arguments()
@@ -128,11 +134,42 @@ class AnalyzeApi(webapp2.RequestHandler):
         self._send_response(entry.value)
 
 
+class CountryApi(BaseApi):
+    """Handler for countries."""
+
+    def alerts(self):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        if 'interval' not in params:
+            params['interval'] = '12 MONTHS'
+        sql = """SELECT countries.name,
+             countries.iso,
+             countries.enabled,
+             alerts.count as alerts_count
+      FROM gfw2_countries as countries
+      LEFT OUTER JOIN (SELECT COUNT(*) as count,
+                              iso
+                       FROM cdm_latest
+                       WHERE date >= now() - INTERVAL '{interval}'
+                       GROUP BY iso) as alerts ON alerts.iso = countries.iso"""
+        rid = self.request.path
+        entry = Entry.get_by_id(rid)
+        if not entry or self.request.get('bust'):
+            result = cdb.execute(sql.format(**params))
+            if result:
+                value = json.loads(result)['rows']
+            entry = Entry(id=rid, value=json.dumps(value))
+            entry.put()
+        self._send_response(entry.value)
+
 routes = [
     webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
                   handler_method='analyze'),
     webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
-                  handler_method='download')
+                  handler_method='download'),
+    webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
+                  handler_method='alerts')
 ]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
