@@ -15,76 +15,124 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-"""This module contains API request handlers for Global Forest Watch."""
-
-from gfw import forma
+"""This module contains request handlers for the Global Forest Watch API."""
 
 import json
-import os
+import logging
+import re
 import webapp2
 
-# True if executing on dev server:
-IS_DEV = os.environ.get('SERVER_SOFTWARE', '').startswith('Dev')
+from gfw import forma
+from gfw import imazon
+from gfw import gcs
+from gfw.common import CONTENT_TYPES, IS_DEV
+from hashlib import md5
+from google.appengine.ext import blobstore
+from google.appengine.ext import ndb
+from google.appengine.ext.webapp import blobstore_handlers
 
-# Matches a date in yyyy-mm-dd format from between 1900-01-01 and 2099-12-31.:
-DATE_REGEX = r'(19|20)\d\d[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])'
 
-# Path to get aggregated FORMA alerts for supplied ISO.
-# /{iso}/{startdate}/{enddate} where dates are in the form yyyy-mm-dd.
-FORMA_ISO = r'/api/v1/defor/analyze/forma/iso/<:\w{3,3}>/<:%s>/<:%s>' \
-    % (DATE_REGEX, DATE_REGEX)
+class Entry(ndb.Model):
+    value = ndb.TextProperty()
 
-# Path for aggregated defor values by dataset for dynamic polygon as GeoJSON:
-FORMA_GEOJSON = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' \
-    % (DATE_REGEX, DATE_REGEX)
 
-# API routes:
-routes = [
-    webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
-    webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
-]
+def analyze(dataset, params):
+    if dataset == 'imazon':
+        return imazon.analyze(params)
+    elif dataset == 'forma':
+        return forma.analyze(params)
+    return None
+
+
+def download(dataset, params):
+    if dataset == 'imazon':
+        return imazon.download(params)
+    elif dataset == 'forma':
+        return forma.download(params)
+    return None
+
+
+ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
+DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+
+
+class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
+    def _get_id(self, params):
+        path, format = self.request.path.lower().split('.')
+        logging.info('FORMAT %s' % format)
+        format = format if format != 'shp' else 'zip'
+        logging.info('FORMAT %s' % format)
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '%s/%s.%s' % (path, md5(params).hexdigest(), format)
+
+    def download(self, dataset, format):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        params['format'] = format
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust'):
+            data = download(dataset, params)
+            if data:
+                content_type = CONTENT_TYPES[format]
+                gcs_path = gcs.create_file(data, rid, content_type)
+                value = blobstore.create_gs_key(gcs_path)
+                entry = Entry(id=rid, value=value)
+                entry.put()
+        if entry.value:
+            self.send_blob(entry.value)
+        else:
+            self.error(404)
 
 
 class AnalyzeApi(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
+    def _send_response(self, data):
+        """Sends supplied result dictionnary as JSON response."""
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.response.headers.add_header('charset', 'utf-8')
+        if not data:
+            self.response.out.write('{}')
+            return
+        self.response.headers.add_header("Content-Type", "application/json")
+        self.response.out.write(data)
+
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
+
     def options(self):
+        """Options to support CORS requests."""
         self.response.headers['Access-Control-Allow-Origin'] = '*'
         self.response.headers['Access-Control-Allow-Headers'] = \
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
-    def forma_iso(self, iso, start_date, end_date):
-        """Return FORMA alert count for supplied ISO and dates."""
-        count = forma.get_alerts_by_iso(iso, start_date, end_date)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
-        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
-        self.response.headers['Access-Control-Allow-Headers'] = \
-            'Origin, X-Requested-With, Content-Type, Accept'
-        self.response.out.headers['Content-Type'] = 'application/json'
-        self.response.headers['charset'] = 'utf-8'
-        self.response.out.write(json.dumps(result))
-
-    def forma_geojson(self, start_date, end_date):
-        """Return FORMA alert count for supplied dates and geojson polygon."""
-        geojson = json.loads(self.request.get('q'))
-        count = forma.get_alerts_by_geojson(geojson, start_date, end_date)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
-        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
-        self.response.headers['Access-Control-Allow-Headers'] = \
-            'Origin, X-Requested-With, Content-Type, Accept'
-        self.response.out.headers['Content-Type'] = 'application/json'
-        self.response.headers['charset'] = 'utf-8'
-        self.response.out.write(json.dumps(result))
+    def analyze(self, dataset):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust'):
+            value = analyze(dataset, params)
+            entry = Entry(id=rid, value=json.dumps(value))
+            entry.put()
+        self._send_response(entry.value)
 
 
-class DownloadApi(webapp2.RequestHandler):
-    pass
-
-
-class SubscribeApi(webapp2.RequestHandler):
-    pass
+routes = [
+    webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
+                  handler_method='analyze'),
+    webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
+                  handler_method='download')
+]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)

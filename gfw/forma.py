@@ -19,61 +19,65 @@
 
 import json
 import logging
-import urllib
-from google.appengine.api import urlfetch
-
-# CartoDB endpoint:
-ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
-
-# FORMA table in CDM:
-FORMA_TABLE = 'cdm_2013_11_08'
+from gfw import cdb
 
 # Query template for number of FORMA alerts by ISO and start/end dates.
 # (table, iso, start, end)
-ISO_SQL = """SELECT SUM(count)
+ISO_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
+  '500 meters' as resolution
 FROM
-  (SELECT COUNT(*) AS count, iso, date
-   FROM %s
-   WHERE iso = '%s'
-         AND date >= '%s'
-         AND date <= '%s'
+  (SELECT COUNT(*), iso, date
+   FROM cdm_latest
+   WHERE iso ilike'{iso}'
+         AND date >= '{begin}'
+         AND date <= '{end}'
    GROUP BY date, iso
    ORDER BY iso, date) AS alias"""
+
+ISO_GEOM_SQL = """SELECT *
+   FROM cdm_latest
+   WHERE iso ilike'{iso}'
+         AND date >= '{begin}'
+         AND date <= '{end}'"""
 
 # Query template for FORMA alert count by GeoJSON polygon and start/end dates.
 # (table, start, end, geojson)
-GEOJSON_SQL = """SELECT SUM(count)
+GEOJSON_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
+  '500 meters' as resolution
 FROM
-  (SELECT COUNT(*) AS count, iso, date
-   FROM %s
-   WHERE date >= '%s'
-     AND date <= '%s'
-     AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('%s'), 4326), the_geom)
+  (SELECT COUNT(*) AS count
+   FROM cdm_latest
+   WHERE date >= '{begin}'
+     AND date <= '{end}'
+     AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
+        the_geom)
    GROUP BY date, iso
    ORDER BY iso, date) AS alias"""
 
-
-def _execute(query):
-    """Exectues supplied query on CartoDB and returns response body as JSON."""
-    rpc = urlfetch.create_rpc(deadline=60)
-    url = '%s?%s' % (ENDPOINT, urllib.urlencode(dict(q=query)))
-    logging.info(url)
-    urlfetch.make_fetch_call(rpc, url)
-    try:
-        result = rpc.get_result()
-        if result.status_code == 200:
-            return json.loads(result.content)
-    except urlfetch.DownloadError:
-        logging.error("Error logging API - %s" % (query))
+GEOJSON_GEOM_SQL = """SELECT *
+   FROM cdm_latest
+   WHERE date >= '{begin}'
+     AND date <= '{end}'
+     AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
+        the_geom)"""
 
 
-def get_alerts_by_iso(iso, start, end):
-    """Return aggregated alert count for supplied iso and start/end dates."""
-    query = ISO_SQL % (FORMA_TABLE, iso.upper(), start, end)
-    return _execute(query)['rows'][0]['sum']
+def download(params):
+    geom = params.get('geom')
+    if geom:
+        query = GEOJSON_GEOM_SQL.format(**params)
+    else:
+        query = ISO_GEOM_SQL.format(**params)
+    return cdb.execute(query, params)
 
 
-def get_alerts_by_geojson(geojson, start, end):
-    """Return FORMA alert count for supplied geojson and start/end dates."""
-    query = GEOJSON_SQL % (FORMA_TABLE, start, end, json.dumps(geojson))
-    return _execute(query)['rows'][0]['sum']
+def analyze(params):
+    geom = params.get('geom')
+    if geom:
+        query = GEOJSON_SQL.format(**params)
+    else:
+        query = ISO_SQL.format(**params)
+    result = cdb.execute(query)
+    if result:
+        result = json.loads(result)['rows'][0]
+    return result

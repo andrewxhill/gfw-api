@@ -15,20 +15,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-application: gfw-apis
-version: v1
-runtime: python27
-threadsafe: true
-api_version: 1
+"""This module provides App Engine configurations."""
 
-libraries:
-- name: jinja2
-  version: "latest"
-- name: webapp2
-  version: "latest"
+import os
+import sys
 
-handlers:
 
-- url: /.*
-  script: gfw.api.handlers
+def fix_path():
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'lib'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'gfw'))
 
+fix_path()
