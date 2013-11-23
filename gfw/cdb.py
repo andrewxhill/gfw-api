@@ -34,13 +34,10 @@ def get_format(media_type):
         return tokens[2].split('+')[0]
 
 
-def execute(query, format, **params):
+def execute(query, params={}):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
     rpc = urlfetch.create_rpc(deadline=60)
     params['q'] = query
-    format = get_format(format)
-    if format:
-        params['format'] = format
     url = '%s?%s' % (ENDPOINT, urllib.urlencode(params))
     logging.info(url)
     urlfetch.make_fetch_call(rpc, url)

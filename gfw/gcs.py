@@ -29,7 +29,7 @@ RETRY_PARAMS = gcs.RetryParams(initial_delay=0.2,
 gcs.set_default_retry_params(RETRY_PARAMS)
 
 
-def create_file(value, filename, content_type, media_type):
+def create_file(value, filename, content_type):
     """Create a file.
 
     The retry_params specified in the open call will override the default

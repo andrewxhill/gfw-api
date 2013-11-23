@@ -20,51 +20,63 @@
 import json
 from gfw import cdb
 
-ALL_GEOM_SQL = """SELECT the_geom, SUM(ST_Area(the_geom::geography))
-AS value, 'Imazon' as name, 'meters' as units
+# Download entire layer:
+DOWNLOAD = """SELECT *
 FROM sad_polygons_fixed_2
 WHERE ST_ISvalid(the_geom)
-GROUP BY the_geom"""
+  AND added_on >= '{begin}'::date
+  AND added_on <= '{end}'::date"""
 
-ALL_SQL = """SELECT SUM(ST_Area(the_geom::geography))
-AS value, 'Imazon' as name, 'meters' as units
-FROM sad_polygons_fixed_2
-WHERE ST_ISvalid(the_geom)"""
-
-GEOJSON_SQL = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
-  ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326)::geography)))
-AS value, 'Imazon' as name, 'meters' as units
-FROM sad_polygons_fixed_2
-WHERE ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326) && the_geom
-  AND ST_ISvalid(the_geom)"""
-
-GEOJSON_GEOM_SQL = """SELECT the_geom,
+# Download within supplied GeoJSON:
+DOWNLOAD_GEOM = """SELECT the_geom,
 SUM(ST_Area(ST_Intersection(the_geom::geography,
-  ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326)::geography)))
+  ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography)))
 AS value, 'Imazon' as name, 'meters' as units
 FROM sad_polygons_fixed_2
-WHERE ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326) && the_geom
+WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
+  AND added_on >= '{begin}'::date
+  AND added_on <= '{end}'::date
 GROUP BY the_geom"""
 
+# Analyze entire layer:
+ANALYSIS = """SELECT SUM(sum) AS value, 'Imazon' as name, 'meters' as units
+FROM
+  (SELECT SUM(ST_Area(the_geom::geography)) AS sum
+   FROM sad_polygons_fixed_2
+   WHERE ST_ISvalid(the_geom)
+     AND added_on >= '{begin}'::date
+     AND added_on <= '{end}'::date
+   GROUP BY added_on
+   ORDER BY added_on) AS alias"""
 
-def analyze(fmt, **params):
-    """ """
-    is_geo = fmt not in ['application/vnd.gfw+json',
-                         'application/vnd.gfw.csv+json']
+# Analyze within supplied GeoJSON:
+ANALYSIS_GEOM = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
+  ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography))) AS value,
+  'Imazon' AS name, 'meters' AS units
+FROM sad_polygons_fixed_2
+WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
+  AND ST_ISvalid(the_geom)
+  AND added_on >= '{begin}'::date
+  AND added_on <= '{end}'::date"""
+
+
+def download(params):
     geom = params.get('geom')
     if geom:
-        if is_geo:
-            query = GEOJSON_GEOM_SQL % (geom, geom)
-        else:
-            query = GEOJSON_SQL % (geom, geom)
+        query = DOWNLOAD_GEOM.format(**params)
     else:
-        if is_geo:
-            query = ALL_GEOM_SQL
-        else:
-            query = ALL_SQL
-    result = cdb.execute(query, fmt)
-    if fmt in ['application/vnd.gfw+json']:
-        if result:
-            result = json.loads(result)['rows'][0]
+        query = DOWNLOAD.format(**params)
+    return cdb.execute(query, params)
+
+
+def analyze(params):
+    geom = params.get('geom')
+    if geom:
+        query = ANALYSIS_GEOM.format(**params)
+    else:
+        query = ANALYSIS.format(**params)
+    result = cdb.execute(query)
+    if result:
+        result = json.loads(result)['rows'][0]
     return result

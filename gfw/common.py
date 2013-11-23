@@ -17,23 +17,16 @@
 
 """This module supports common functions."""
 
+import json
 import os
+from hashlib import md5
 
 CONTENT_TYPES = {
-    'application/vnd.gfw+json': 'application/json',
-    'application/vnd.gfw.geojson+json': 'application/json',
-    'application/vnd.gfw.csv+json': 'application/csv',
-    'application/vnd.gfw.svg+json': 'image/svg+xml',
-    'application/vnd.gfw.kml+json': 'application/vnd.google-earth.kmz',
-    'application/vnd.gfw.shp+json': 'application/octet-stream'
-}
-
-MEDIA_TYPES = {
-    'shp': 'application/vnd.gfw.shp+json',
-    'kml': 'application/vnd.gfw.kml+json',
-    'svg': 'application/vnd.gfw.svg+json',
-    'csv': 'application/vnd.gfw.csv+json',
-    'geojson': 'application/vnd.gfw.geojson+json'
+    'shp': 'application/octet-stream',
+    'kml': 'application/vnd.google-earth.kmz',
+    'svg': 'image/svg+xml',
+    'csv': 'application/csv',
+    'geojson': 'application/json',
 }
 
 
@@ -45,6 +38,10 @@ if IS_DEV:
     APP_BASE_URL = 'http://localhost:8080'
 else:
     APP_BASE_URL = 'http://gfw-apis.appspot.com'
+
+
+def get_params_hash(params):
+    return md5(json.dumps(params, sort_keys=True)).hexdigest()
 
 
 def get_cartodb_format(gfw_media_type):

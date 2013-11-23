@@ -15,81 +15,79 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-"""This module contains API request handlers for Global Forest Watch."""
-
-from gfw import cache
-from gfw import forma
-from gfw import imazon
-from gfw import modis
-from gfw.common import CONTENT_TYPES
-from gfw.common import APP_BASE_URL
-from gfw.common import MEDIA_TYPES
-from google.appengine.ext import blobstore
-from google.appengine.ext.webapp import blobstore_handlers
+"""This module contains request handlers for the Global Forest Watch API."""
 
 import json
 import logging
-import md5
-import os
 import re
-import urllib
 import webapp2
 
-# application/vnd.gfw+json
-
-# True if executing on dev server:
-IS_DEV = os.environ.get('SERVER_SOFTWARE', '').startswith('Dev')
-
-# Matches a date in yyyy-mm-dd format from between 1900-01-01 and 2099-12-31.:
-DATE_REGEX = r'(19|20)\d\d[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])'
-
-# Path to get aggregated FORMA alerts for supplied ISO.
-# /{iso}/{startdate}/{enddate} where dates are in the form yyyy-mm-dd.
-FORMA_ISO = r'/api/v1/defor/analyze/forma/iso/<:\w{3,3}>/<:%s>/<:%s>' \
-    % (DATE_REGEX, DATE_REGEX)
-
-# Path for aggregated defor values by dataset for dynamic polygon as GeoJSON:
-FORMA_GEOJSON = r'/api/v1/defor/analyze/forma/<:%s>/<:%s>' \
-    % (DATE_REGEX, DATE_REGEX)
-
-MODIS_ISO = r'/api/v1/defor/analyze/modis/iso/<:\w{3,3}>/<:%s>' % DATE_REGEX
-MODIS_GEOJSON = r'/api/v1/defor/analyze/modis/<:%s>' % DATE_REGEX
-
-# Imazon defor value in BRA poly or GeoJSON for supplied date range.
-# Note: Only data for 2008-2012
-IMAZON = r'/api/dataset/imazon'
-# IMAZON_DOWNLOAD = r'/api/dataset/imazon<:\.(shp|geojson|kml|svg|csv)?.*>'
-IMAZON_DOWNLOAD = r'/api/dataset/imazon/<:.*\.(shp|geojson|kml|svg|csv)>'
-
-# API routes:
-routes = [
-    webapp2.Route(IMAZON, handler='gfw.api.Handler:imazon'),
-    webapp2.Route(IMAZON_DOWNLOAD, handler='gfw.api.DownloadHandler:imazon'),
-
-    webapp2.Route(FORMA_ISO, handler='gfw.api.AnalyzeApi:forma_iso'),
-    webapp2.Route(FORMA_GEOJSON, handler='gfw.api.AnalyzeApi:forma_geojson'),
-    webapp2.Route(MODIS_ISO, handler='gfw.api.AnalyzeApi:modis_iso'),
-    webapp2.Route(MODIS_GEOJSON, handler='gfw.api.AnalyzeApi:modis_geojson'),
-]
+from gfw import forma
+from gfw import imazon
+from gfw import gcs
+from gfw.common import CONTENT_TYPES, IS_DEV
+from hashlib import md5
+from google.appengine.ext import blobstore
+from google.appengine.ext import ndb
+from google.appengine.ext.webapp import blobstore_handlers
 
 
-class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
-    def imazon(self, foo):
-        geomhex = foo.split('.')[0]
-        geom = cache.Geom.get_by_id(geomhex)
-        if not geom:
+class Entry(ndb.Model):
+    value = ndb.TextProperty()
+
+
+def analyze(dataset, params):
+    if dataset == 'imazon':
+        return imazon.analyze(params)
+    elif dataset == 'forma':
+        return forma.analyze(params)
+    return None
+
+
+def download(dataset, params):
+    if dataset == 'imazon':
+        return imazon.download(params)
+    elif dataset == 'forma':
+        return forma.download(params)
+    return None
+
+
+ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
+DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+
+
+class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
+    def _get_id(self, params):
+        path, format = self.request.path.lower().split('.')
+        logging.info('FORMAT %s' % format)
+        format = format if format != 'shp' else 'zip'
+        logging.info('FORMAT %s' % format)
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '%s/%s.%s' % (path, md5(params).hexdigest(), format)
+
+    def download(self, dataset, format):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        params['format'] = format
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust'):
+            data = download(dataset, params)
+            if data:
+                content_type = CONTENT_TYPES[format]
+                gcs_path = gcs.create_file(data, rid, content_type)
+                value = blobstore.create_gs_key(gcs_path)
+                entry = Entry(id=rid, value=value)
+                entry.put()
+        if entry.value:
+            self.send_blob(entry.value)
+        else:
             self.error(404)
-            return
-        path, format = self.request.path.split('.')
-        mt = MEDIA_TYPES[format]
-        data = cache.hit(path, mt, geom=geomhex)
-        if not data:
-            value = imazon.analyze(mt, geom=geom.geom)
-            data = cache.update(path, mt, value, geom=geomhex)
-        self.send_blob(data.gcskey)
 
 
-class Handler(webapp2.RequestHandler):
+class AnalyzeApi(webapp2.RequestHandler):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
     def _send_response(self, data):
@@ -102,27 +100,13 @@ class Handler(webapp2.RequestHandler):
         if not data:
             self.response.out.write('{}')
             return
-        self.response.headers.add_header("X-GFW-Media-Type",
-                                         str(data.media_type))
-        self.response.headers.add_header("Content-Type",
-                                         CONTENT_TYPES[data.media_type])
-        if data.download:
-            self.redirect(data.value)
-        else:
-            self.response.out.write(data.value)
+        self.response.headers.add_header("Content-Type", "application/json")
+        self.response.out.write(data)
 
-    def _get_gfw_media_type(self):
-        mt = self.request.headers['Accept']
-        if not mt:
-            mt = 'application/vnd.gfw+json'
-        else:
-            mt = filter(lambda x: x.startswith('application/vnd.gfw'),
-                        mt.split(','))
-            if not mt:
-                mt = 'application/vnd.gfw+json'
-            else:
-                mt = mt[0]
-        return mt
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
 
     def options(self):
         """Options to support CORS requests."""
@@ -131,70 +115,24 @@ class Handler(webapp2.RequestHandler):
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
-    def imazon(self):
-        path = self.request.path
-        geom = self.request.get('geom')
-        geomhex = md5.new(geom).hexdigest() if geom else ''
-        if geomhex:
-            cache.Geom(id=geomhex, geom=geom).put()
-            download_url = '%s%s/%s{.extension}' % \
-                (APP_BASE_URL, path, geomhex)
-        else:
-            download_url = '%s%s{.extension}' % (APP_BASE_URL, path)
-        #q = urllib.unquote(geom.encode('ascii')).decode('utf-8')
-        # params = 'geom=' + urllib.quote(
-        #     re.sub(re.compile(u'\s+'), '', q).encode('utf-8'))
-        # query = '?' + params if params else ''
-        mt = self._get_gfw_media_type()
-        data = cache.hit(path, mt, geom=geomhex)
-        if not data:
-            value = imazon.analyze(mt, geom=geom)
-            if value:
-                value['url'] = '%s%s' % (APP_BASE_URL, path)
-                value['download_url'] = download_url
-                value = json.dumps(value)
-                data = cache.update(path, mt, value, geom=geomhex)
-            logging.info("VALUE %s" % type(value))
-        else:
-            logging.info('HIT %s' % path)
-        self._send_response(data)
-
-    def modis_iso(self, iso, date):
-        """Return MODIS count for supplied ISO and date."""
-        count = modis.get_count_by_iso(iso, date)
-        result = {'units': 'count', 'value': count,
-                  'value_display': format(count, ",d")}
-        self._send_response(result)
-
-    def modis_geojson(self, date):
-        """Return MODIS count for supplied date and geojson polygon."""
-        geojson = json.loads(self.request.get('q'))
-        count = modis.get_count_by_geojson(geojson, date)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
-        self._send_response(result)
-
-    def forma_iso(self, iso, start_date, end_date):
-        """Return FORMA alert count for supplied ISO and dates."""
-        count = forma.get_alerts_by_iso(iso, start_date, end_date)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
-        self._send_response(result)
-
-    def forma_geojson(self, start_date, end_date):
-        """Return FORMA alert count for supplied dates and geojson polygon."""
-        geojson = json.loads(self.request.get('q'))
-        count = forma.get_alerts_by_geojson(geojson, start_date, end_date)
-        result = {'units': 'alerts', 'value': count,
-                  'value_display': format(count, ",d")}
-        self._send_response(result)
+    def analyze(self, dataset):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust'):
+            value = analyze(dataset, params)
+            entry = Entry(id=rid, value=json.dumps(value))
+            entry.put()
+        self._send_response(entry.value)
 
 
-class DownloadApi(webapp2.RequestHandler):
-    pass
-
-
-class SubscribeApi(webapp2.RequestHandler):
-    pass
+routes = [
+    webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
+                  handler_method='analyze'),
+    webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
+                  handler_method='download')
+]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
