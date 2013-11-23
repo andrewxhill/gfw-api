@@ -105,6 +105,11 @@ class BaseApi(webapp2.RequestHandler):
         self.response.headers.add_header("Content-Type", "application/json")
         self.response.out.write(data)
 
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
+
     def options(self):
         """Options to support CORS requests."""
         self.response.headers['Access-Control-Allow-Origin'] = '*'
@@ -115,11 +120,6 @@ class BaseApi(webapp2.RequestHandler):
 
 class AnalyzeApi(BaseApi):
     """Handler for aggregated defor values for supplied dataset and polygon."""
-
-    def _get_id(self, params):
-        whitespace = re.compile(r'\s+')
-        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
-        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
 
     def analyze(self, dataset):
         args = self.request.arguments()
@@ -141,6 +141,7 @@ class CountryApi(BaseApi):
         args = self.request.arguments()
         vals = map(self.request.get, args)
         params = dict(zip(args, vals))
+        rid = self._get_id(params)
         if 'interval' not in params:
             params['interval'] = '12 MONTHS'
         sql = """SELECT countries.name,
@@ -153,7 +154,6 @@ class CountryApi(BaseApi):
                        FROM cdm_latest
                        WHERE date >= now() - INTERVAL '{interval}'
                        GROUP BY iso) as alerts ON alerts.iso = countries.iso"""
-        rid = self.request.path
         entry = Entry.get_by_id(rid)
         if not entry or self.request.get('bust'):
             result = cdb.execute(sql.format(**params))
