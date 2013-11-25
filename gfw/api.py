@@ -152,8 +152,12 @@ class StoriesApi(BaseApi):
         subject = 'A new story has been registered with Global Forest Watch'
         sender = 'Global Forest Watch Stories <%s>' % wri_email
         reply_to = 'Global Forest Watch Stories <gfw@wri.org>'
-        to = ['janderson@wri.org', 'gfw@wri.org', 'sminnemeyer@wri.org',
-              'aleach@wri.org']
+
+        # For production:
+        # to = ['janderson@wri.org', 'gfw@wri.org', 'sminnemeyer@wri.org',
+        #       'aleach@wri.org']
+
+        to = ['eightysteele@gmail.com']  # For testing
         story_url = 'http://gfw-beta.org/stories/%s' % story['id']
         api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
         token = story['token']
