@@ -17,15 +17,19 @@
 
 """This module contains request handlers for the Global Forest Watch API."""
 
+import base64
+import hashlib
 import json
 import logging
+import random
 import re
 import webapp2
 
 from gfw import cdb
 from gfw import forma
-from gfw import imazon
 from gfw import gcs
+from gfw import imazon
+from gfw import stories
 from gfw.common import CONTENT_TYPES, IS_DEV
 from hashlib import md5
 from google.appengine.ext import blobstore
@@ -56,6 +60,11 @@ def download(dataset, params):
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
 COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
+
+# Stories API
+LIST_STORIES = r'/stories'
+CREATE_STORY = r'/stories/new'
+GET_STORY = r'/stories/<id:\d+>'
 
 
 class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
@@ -110,12 +119,60 @@ class BaseApi(webapp2.RequestHandler):
         params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
         return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
 
+    def _get_params(self, body=False):
+        if body:
+            params = json.loads(self.request.body)
+        else:
+            args = self.request.arguments()
+            vals = map(self.request.get, args)
+            logging.info('ARGS %s VALS %s' % (args, vals))
+            params = dict(zip(args, vals))
+        return params
+
     def options(self):
         """Options to support CORS requests."""
         self.response.headers['Access-Control-Allow-Origin'] = '*'
         self.response.headers['Access-Control-Allow-Headers'] = \
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+
+class StoriesApi(BaseApi):
+
+    def _gen_token(self):
+        return base64.b64encode(
+            hashlib.sha256(str(random.getrandbits(256))).digest(),
+            random.choice(
+                ['rA', 'aZ', 'gQ', 'hH', 'hG', 'aR', 'DD'])).rstrip('==')
+
+    def list(self):
+        result = stories.list()
+        if not result:
+            self.response.set_status(404)
+        self._send_response(json.dumps(result))
+
+    def create(self):
+        params = self._get_params(body=True)
+        logging.info(params.keys())
+        logging.info(params)
+        required = ['title', 'email', 'name', 'geom']
+        if not all(x in params and params.get(x) for x in required):
+            self.response.set_status(400)
+            self._send_response(json.dumps(dict(required=required)))
+        params['token'] = self._gen_token()
+        result = stories.create(params)
+        if result and json.loads(result)['total_rows'] == 1:
+            self.response.set_status(201)
+        else:
+            self.response.set_status(400)
+            self.response.out.write(result)
+
+    def get(self, id):
+        params = dict(id=id)
+        result = stories.get(params)
+        if not result:
+            self.response.set_status(404)
+        self._send_response(json.dumps(result))
 
 
 class AnalyzeApi(BaseApi):
@@ -169,7 +226,13 @@ routes = [
     webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
                   handler_method='download'),
     webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
-                  handler_method='alerts')
+                  handler_method='alerts'),
+    webapp2.Route(CREATE_STORY, handler=StoriesApi,
+                  handler_method='create', methods=['POST']),
+    webapp2.Route(LIST_STORIES, handler=StoriesApi,
+                  handler_method='list'),
+    webapp2.Route(GET_STORY, handler=StoriesApi,
+                  handler_method='get')
 ]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
