@@ -30,8 +30,10 @@ from gfw import forma
 from gfw import gcs
 from gfw import imazon
 from gfw import stories
-from gfw.common import CONTENT_TYPES, IS_DEV
+from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
+from google.appengine.api import mail
+from google.appengine.api import taskqueue
 from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
@@ -64,6 +66,7 @@ COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
 # Stories API
 LIST_STORIES = r'/stories'
 CREATE_STORY = r'/stories/new'
+CREATE_STORY_EMAILS = r'/stories/email'
 GET_STORY = r'/stories/<id:\d+>'
 
 
@@ -139,6 +142,33 @@ class BaseApi(webapp2.RequestHandler):
 
 class StoriesApi(BaseApi):
 
+    def _send_new_story_emails(self):
+        story = self._get_params()
+
+        wri_email = 'eightysteele@gmail.com'
+        # TODO: Change to gfw@wri.org
+
+        # Email WRI:
+        subject = 'A new story has been registered with Global Forest Watch'
+        sender = 'Global Forest Watch Stories <%s>' % wri_email
+        reply_to = 'Global Forest Watch Stories <gfw@wri.org>'
+        to = 'Global Forest Watch Team <%s>' % wri_email
+        story_url = 'http://gfw-beta.org/stories/%s' % story['id']
+        api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
+        token = story['token']
+        body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
+            (story_url, api_url, token)
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
+                       reply_to=reply_to)
+
+        # Email user:
+        subject = 'Your story has been registered with Global Forest Watch!'
+        sender = 'Global Forest Watch Stories <%s>' % wri_email
+        to = '%s <%s>' % (story['name'], story['email'])
+        body = 'Here is your story: %s' % story_url
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
+                       reply_to=reply_to)
+
     def _gen_token(self):
         return base64.b64encode(
             hashlib.sha256(str(random.getrandbits(256))).digest(),
@@ -154,19 +184,22 @@ class StoriesApi(BaseApi):
 
     def create(self):
         params = self._get_params(body=True)
-        logging.info(params.keys())
-        logging.info(params)
         required = ['title', 'email', 'name', 'geom']
         if not all(x in params and params.get(x) for x in required):
             self.response.set_status(400)
             self._send_response(json.dumps(dict(required=required)))
         params['token'] = self._gen_token()
         result = stories.create(params)
-        if result and json.loads(result)['total_rows'] == 1:
+        if result:
+            story = json.loads(result)['rows'][0]
+            story['media'] = json.loads(story['media'])
             self.response.set_status(201)
         else:
+            story = None
             self.response.set_status(400)
-            self.response.out.write(result)
+        taskqueue.add(url='/stories/email', params=story,
+                      queue_name="story-new-emails")
+        self.response.out.write(story)
 
     def get(self, id):
         params = dict(id=id)
@@ -233,7 +266,10 @@ routes = [
     webapp2.Route(LIST_STORIES, handler=StoriesApi,
                   handler_method='list'),
     webapp2.Route(GET_STORY, handler=StoriesApi,
-                  handler_method='get')
+                  handler_method='get'),
+    webapp2.Route(CREATE_STORY_EMAILS, handler=StoriesApi,
+                  handler_method='_send_new_story_emails',
+                  methods=['POST'])
 ]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)

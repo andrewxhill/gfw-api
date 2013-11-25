@@ -27,7 +27,9 @@ INSERT = """INSERT INTO community_stories
   VALUES
   ('{details!s}', '{email!s}', {featured}::boolean, '{name!s}', '{title!s}',
    '{token!s}', {visible}::boolean, '{date}'::date, '{location!s}',
-   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326), '{media}')"""
+   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326), '{media}')
+  RETURNING details, email, featured, name, title, visible, date,
+    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media, token"""
 
 LIST = """SELECT details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
