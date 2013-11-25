@@ -22,43 +22,43 @@ from gfw import cdb
 
 # Download entire layer:
 DOWNLOAD = """SELECT *
-FROM sad_polygons_fixed_2
+FROM imazon_clean
 WHERE ST_ISvalid(the_geom)
-  AND added_on >= '{begin}'::date
-  AND added_on <= '{end}'::date"""
+  AND date >= '{begin}'::date
+  AND date <= '{end}'::date"""
 
 # Download within supplied GeoJSON:
 DOWNLOAD_GEOM = """SELECT the_geom,
 SUM(ST_Area(ST_Intersection(the_geom::geography,
   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography)))
 AS value, 'Imazon' as name, 'meters' as units
-FROM sad_polygons_fixed_2
+FROM imazon_clean
 WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
-  AND added_on >= '{begin}'::date
-  AND added_on <= '{end}'::date
+  AND date >= '{begin}'::date
+  AND date <= '{end}'::date
 GROUP BY the_geom"""
 
 # Analyze entire layer:
 ANALYSIS = """SELECT SUM(sum) AS value, 'Imazon' as name, 'meters' as units
 FROM
   (SELECT SUM(ST_Area(the_geom::geography)) AS sum
-   FROM sad_polygons_fixed_2
+   FROM imazon_clean
    WHERE ST_ISvalid(the_geom)
-     AND added_on >= '{begin}'::date
-     AND added_on <= '{end}'::date
-   GROUP BY added_on
-   ORDER BY added_on) AS alias"""
+     AND date >= '{begin}'::date
+     AND date <= '{end}'::date
+   GROUP BY date
+   ORDER BY date) AS alias"""
 
 # Analyze within supplied GeoJSON:
 ANALYSIS_GEOM = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography))) AS value,
   'Imazon' AS name, 'meters' AS units
-FROM sad_polygons_fixed_2
+FROM imazon_clean
 WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
-  AND added_on >= '{begin}'::date
-  AND added_on <= '{end}'::date"""
+  AND date >= '{begin}'::date
+  AND date <= '{end}'::date"""
 
 
 def download(params):

@@ -22,6 +22,7 @@ import logging
 import re
 import webapp2
 
+from gfw import cdb
 from gfw import forma
 from gfw import imazon
 from gfw import gcs
@@ -54,6 +55,7 @@ def download(dataset, params):
 
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
 
 
 class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
@@ -87,8 +89,8 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
             self.error(404)
 
 
-class AnalyzeApi(webapp2.RequestHandler):
-    """Handler for aggregated defor values for supplied dataset and polygon."""
+class BaseApi(webapp2.RequestHandler):
+    """Base request handler for API."""
 
     def _send_response(self, data):
         """Sends supplied result dictionnary as JSON response."""
@@ -115,6 +117,10 @@ class AnalyzeApi(webapp2.RequestHandler):
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
 
+
+class AnalyzeApi(BaseApi):
+    """Handler for aggregated defor values for supplied dataset and polygon."""
+
     def analyze(self, dataset):
         args = self.request.arguments()
         vals = map(self.request.get, args)
@@ -128,11 +134,42 @@ class AnalyzeApi(webapp2.RequestHandler):
         self._send_response(entry.value)
 
 
+class CountryApi(BaseApi):
+    """Handler for countries."""
+
+    def alerts(self):
+        args = self.request.arguments()
+        vals = map(self.request.get, args)
+        params = dict(zip(args, vals))
+        rid = self._get_id(params)
+        if 'interval' not in params:
+            params['interval'] = '12 MONTHS'
+        sql = """SELECT countries.name,
+             countries.iso,
+             countries.enabled,
+             alerts.count as alerts_count
+      FROM gfw2_countries as countries
+      LEFT OUTER JOIN (SELECT COUNT(*) as count,
+                              iso
+                       FROM cdm_latest
+                       WHERE date >= now() - INTERVAL '{interval}'
+                       GROUP BY iso) as alerts ON alerts.iso = countries.iso"""
+        entry = Entry.get_by_id(rid)
+        if not entry or self.request.get('bust'):
+            result = cdb.execute(sql.format(**params))
+            if result:
+                value = json.loads(result)['rows']
+            entry = Entry(id=rid, value=json.dumps(value))
+            entry.put()
+        self._send_response(entry.value)
+
 routes = [
     webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
                   handler_method='analyze'),
     webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
-                  handler_method='download')
+                  handler_method='download'),
+    webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
+                  handler_method='alerts')
 ]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
