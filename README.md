@@ -21,19 +21,7 @@ $ cd gfw-api
 $ dev_appserver.py .
 ```
 
-Boom! The webapp is now running locally at [http://localhost:8080](http://localhost:8080) and you get an admin console at [http://localhost:8080/_ah/admin](http://localhost:8080/_ah/admin). For a quick sanity check:
-
-[http://localhost:8080/api/v1/defor/analyze/forma/iso/bra/2005-03-05/2006-08-01](http://localhost:8080/api/v1/defor/analyze/forma/iso/bra/2005-03-05/2006-08-01)
-
-Should return something like:
-
-```json
-{
-  "value": 415498,
-  "units": "alerts",
-  "value_display": "415,498"
-}
-```
+Boom! The webapp is now running locally at [http://localhost:8080](http://localhost:8080) and you get an admin console at [http://localhost:8080/_ah/admin](http://localhost:8080/_ah/admin). Some API methods require a CartoDB API key, so make sure you have a `gfw/cdb.txt` file with the key.
 
 # Deploying
 
