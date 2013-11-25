@@ -32,7 +32,7 @@ INSERT = """INSERT INTO community_stories
 LIST = """SELECT details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
 FROM community_stories
-WHERE visible = True"""
+WHERE visible = True {and_where}"""
 
 
 GET = """SELECT details, email, featured, name, title, visible, date,
@@ -50,8 +50,6 @@ def _prep_story(story):
     return story
 
 
-# curl -X POST -d "title=foo&email=foo&name=foo&lat=1&lon=2"
-# http://localhost:8080/stories/create
 def create(params):
     """Create new story with params."""
     props = dict(details='', email='', featured='False', name='',
@@ -64,8 +62,16 @@ def create(params):
     return cdb.execute(INSERT.format(**props), api_key=True)
 
 
-def list():
-    result = cdb.execute(LIST, api_key=True)
+def list(params):
+    and_where = ''
+    if 'geom' in params:
+        and_where = """AND ST_Intersects(the_geom::geography,
+            ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography)"""
+    if 'since' in params:
+        and_where += """ AND date >= '{since}'::date"""
+    if and_where:
+        and_where = and_where.format(**params)
+    result = cdb.execute(LIST.format(and_where=and_where), api_key=True)
     if result:
         data = json.loads(result)
         if 'total_rows' in data and data['total_rows'] > 0:

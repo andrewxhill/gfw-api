@@ -146,9 +146,10 @@ class StoriesApi(BaseApi):
                 ['rA', 'aZ', 'gQ', 'hH', 'hG', 'aR', 'DD'])).rstrip('==')
 
     def list(self):
-        result = stories.list()
+        params = self._get_params()
+        result = stories.list(params)
         if not result:
-            self.response.set_status(404)
+            result = []
         self._send_response(json.dumps(result))
 
     def create(self):
