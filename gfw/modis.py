@@ -20,27 +20,39 @@
 import json
 from gfw import cdb
 
-ISO_SQL = """SELECT count(*) AS total
+ANALYSIS = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
-WHERE m.date = '%s'
+WHERE m.date = '{date}'
       AND m.country = c.name
-      AND c.iso3 = '%s'
-LIMIT 1"""
+      AND c.iso3 = '{iso}'
+GROUP BY c.the_geom"""
 
-GEOJSON_SQL = """SELECT count(*) AS total
+ANALYSIS_GEOM = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
-WHERE ST_Intersects(m.the_geom,ST_SetSRID(ST_GeomFromGeoJSON('%s'),4326))
-      AND m.date = '%s'
-LIMIT 1"""
+WHERE ST_Intersects(m.the_geom,ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326))
+      AND m.date = '{date}'
+GROUP BY c.the_geom"""
 
 
-def get_count_by_iso(iso, date):
-    """Return MODIS count for supplied iso and date."""
-    query = ISO_SQL % (date, iso.upper())
-    return cdb.execute(query)['rows'][0]['total']
+def download(params):
+    params['select_geom'] = ', c.the_geom'
+    geom = params.get('geom')
+    if geom:
+        query = ANALYSIS_GEOM.format(**params)
+    else:
+        query = ANALYSIS.format(**params)
+    return cdb.execute(query, params)
 
 
-def get_count_by_geojson(geojson, date):
-    """Return MODIS count for supplied geojson and date."""
-    query = GEOJSON_SQL % (json.dumps(geojson), date)
-    return cdb.execute(query)['rows'][0]['total']
+def analyze(params):
+    params['select_geom'] = ''
+    params['iso'] = params['iso'].upper()
+    geom = params.get('geom')
+    if geom:
+        query = ANALYSIS_GEOM.format(**params)
+    else:
+        query = ANALYSIS.format(**params)
+    result = cdb.execute(query)
+    if result:
+        result = json.loads(result)['rows'][0]
+    return result
