@@ -18,11 +18,18 @@
 """This module supports executing CartoDB queries."""
 
 import logging
+import os
 import urllib
 from google.appengine.api import urlfetch
 
 # CartoDB endpoint:
 ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
+
+
+def _get_api_key():
+    """Return CartoDB API key stored in cdb.txt file."""
+    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cdb.txt')
+    return open(path, "r").read()
 
 
 def get_format(media_type):
@@ -34,10 +41,12 @@ def get_format(media_type):
         return tokens[2].split('+')[0]
 
 
-def execute(query, params={}):
+def execute(query, params={}, api_key=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
     rpc = urlfetch.create_rpc(deadline=60)
     params['q'] = query
+    if api_key:
+        params['api_key'] = _get_api_key()
     url = '%s?%s' % (ENDPOINT, urllib.urlencode(params))
     logging.info(url)
     urlfetch.make_fetch_call(rpc, url)

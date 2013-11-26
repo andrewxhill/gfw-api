@@ -17,17 +17,23 @@
 
 """This module contains request handlers for the Global Forest Watch API."""
 
+import base64
+import hashlib
 import json
 import logging
+import random
 import re
 import webapp2
 
 from gfw import cdb
 from gfw import forma
-from gfw import imazon
 from gfw import gcs
-from gfw.common import CONTENT_TYPES, IS_DEV
+from gfw import imazon
+from gfw import stories
+from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
+from google.appengine.api import mail
+from google.appengine.api import taskqueue
 from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
@@ -56,6 +62,12 @@ def download(dataset, params):
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
 COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
+
+# Stories API
+LIST_STORIES = r'/stories'
+CREATE_STORY = r'/stories/new'
+CREATE_STORY_EMAILS = r'/stories/email'
+GET_STORY = r'/stories/<id:\d+>'
 
 
 class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
@@ -110,12 +122,96 @@ class BaseApi(webapp2.RequestHandler):
         params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
         return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
 
+    def _get_params(self, body=False):
+        if body:
+            params = json.loads(self.request.body)
+        else:
+            args = self.request.arguments()
+            vals = map(self.request.get, args)
+            logging.info('ARGS %s VALS %s' % (args, vals))
+            params = dict(zip(args, vals))
+        return params
+
     def options(self):
         """Options to support CORS requests."""
         self.response.headers['Access-Control-Allow-Origin'] = '*'
         self.response.headers['Access-Control-Allow-Headers'] = \
             'Origin, X-Requested-With, Content-Type, Accept'
         self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+
+class StoriesApi(BaseApi):
+
+    def _send_new_story_emails(self):
+        story = self._get_params()
+
+        wri_email = 'eightysteele@gmail.com'
+        # TODO: Change to gfw@wri.org
+
+        # Email WRI:
+        subject = 'A new story has been registered with Global Forest Watch'
+        sender = 'Global Forest Watch Stories <%s>' % wri_email
+        reply_to = 'Global Forest Watch Stories <gfw@wri.org>'
+
+        # For production:
+        # to = ['janderson@wri.org', 'gfw@wri.org', 'sminnemeyer@wri.org',
+        #       'aleach@wri.org']
+
+        to = ['eightysteele@gmail.com']  # For testing
+        story_url = 'http://gfw-beta.org/stories/%s' % story['id']
+        api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
+        token = story['token']
+        body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
+            (story_url, api_url, token)
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
+                       reply_to=reply_to)
+
+        # Email user:
+        subject = 'Your story has been registered with Global Forest Watch!'
+        sender = 'Global Forest Watch Stories <%s>' % wri_email
+        to = '%s <%s>' % (story['name'], story['email'])
+        body = 'Here is your story: %s' % story_url
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
+                       reply_to=reply_to)
+
+    def _gen_token(self):
+        return base64.b64encode(
+            hashlib.sha256(str(random.getrandbits(256))).digest(),
+            random.choice(
+                ['rA', 'aZ', 'gQ', 'hH', 'hG', 'aR', 'DD'])).rstrip('==')
+
+    def list(self):
+        params = self._get_params()
+        result = stories.list(params)
+        if not result:
+            result = []
+        self._send_response(json.dumps(result))
+
+    def create(self):
+        params = self._get_params(body=True)
+        required = ['title', 'email', 'name', 'geom']
+        if not all(x in params and params.get(x) for x in required):
+            self.response.set_status(400)
+            self._send_response(json.dumps(dict(required=required)))
+        params['token'] = self._gen_token()
+        result = stories.create(params)
+        if result:
+            story = json.loads(result)['rows'][0]
+            story['media'] = json.loads(story['media'])
+            self.response.set_status(201)
+        else:
+            story = None
+            self.response.set_status(400)
+        taskqueue.add(url='/stories/email', params=story,
+                      queue_name="story-new-emails")
+        self.response.out.write(story)
+
+    def get(self, id):
+        params = dict(id=id)
+        result = stories.get(params)
+        if not result:
+            self.response.set_status(404)
+        self._send_response(json.dumps(result))
 
 
 class AnalyzeApi(BaseApi):
@@ -169,7 +265,16 @@ routes = [
     webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
                   handler_method='download'),
     webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
-                  handler_method='alerts')
+                  handler_method='alerts'),
+    webapp2.Route(CREATE_STORY, handler=StoriesApi,
+                  handler_method='create', methods=['POST']),
+    webapp2.Route(LIST_STORIES, handler=StoriesApi,
+                  handler_method='list'),
+    webapp2.Route(GET_STORY, handler=StoriesApi,
+                  handler_method='get'),
+    webapp2.Route(CREATE_STORY_EMAILS, handler=StoriesApi,
+                  handler_method='_send_new_story_emails',
+                  methods=['POST'])
 ]
 
 handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
