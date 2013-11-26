@@ -29,6 +29,7 @@ from gfw import cdb
 from gfw import forma
 from gfw import gcs
 from gfw import imazon
+from gfw import modis
 from gfw import stories
 from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
@@ -48,6 +49,8 @@ def analyze(dataset, params):
         return imazon.analyze(params)
     elif dataset == 'forma':
         return forma.analyze(params)
+    elif dataset == 'modis':
+        return modis.analyze(params)
     return None
 
 
@@ -56,6 +59,8 @@ def download(dataset, params):
         return imazon.download(params)
     elif dataset == 'forma':
         return forma.download(params)
+    elif dataset == 'modis':
+        return modis.download(params)
     return None
 
 
