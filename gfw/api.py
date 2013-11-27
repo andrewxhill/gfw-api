@@ -31,6 +31,7 @@ from gfw import gcs
 from gfw import imazon
 from gfw import modis
 from gfw import stories
+from gfw import wdpa
 from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
 from google.appengine.api import mail
@@ -67,6 +68,7 @@ def download(dataset, params):
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
 COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
+WDPA = r'/wdpa/sites'
 
 # Stories API
 LIST_STORIES = r'/stories'
@@ -235,6 +237,19 @@ class AnalyzeApi(BaseApi):
         self._send_response(entry.value)
 
 
+class WdpaApi(BaseApi):
+    def site(self):
+        params = self._get_params()
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust'):
+            site = wdpa.get_site(params)
+            if site:
+                entry = Entry(id=rid, value=json.dumps(site))
+                entry.put()
+        self._send_response(entry.value if entry else None)
+
+
 class CountryApi(BaseApi):
     """Handler for countries."""
 
@@ -277,6 +292,8 @@ routes = [
                   handler_method='list'),
     webapp2.Route(GET_STORY, handler=StoriesApi,
                   handler_method='get'),
+    webapp2.Route(WDPA, handler=WdpaApi,
+                  handler_method='site'),
     webapp2.Route(CREATE_STORY_EMAILS, handler=StoriesApi,
                   handler_method='_send_new_story_emails',
                   methods=['POST'])
