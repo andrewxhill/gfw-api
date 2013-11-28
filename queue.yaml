@@ -19,3 +19,7 @@ total_storage_limit: 120M
 queue:
 - name: story-new-emails
   rate: 35/s
+- name: pubsub-notify
+  rate: 35/s
+- name: pubsub-publish
+  rate: 35/s    

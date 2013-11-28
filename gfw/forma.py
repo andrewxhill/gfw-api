@@ -21,8 +21,27 @@ import json
 import logging
 from gfw import cdb
 
-# Query template for number of FORMA alerts by ISO and start/end dates.
-# (table, iso, start, end)
+ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
+  '500 meters' as resolution
+FROM
+  (SELECT COUNT(*), iso, date
+   FROM cdm_latest
+   WHERE iso ilike '{iso}'
+         AND date <= now() - INTERVAL '1 Months'
+   GROUP BY date, iso
+   ORDER BY iso, date) AS alias"""
+
+GEOJSON_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name,
+  'alerts' as unit, '500 meters' as resolution
+FROM
+  (SELECT COUNT(*) AS count
+   FROM cdm_latest
+   WHERE date <= now() - INTERVAL '1 Months'
+     AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom!s}'), 4326),
+        the_geom)
+   GROUP BY date, iso
+   ORDER BY iso, date) AS alias"""
+
 ISO_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
 FROM
@@ -40,8 +59,6 @@ ISO_GEOM_SQL = """SELECT *
          AND date >= '{begin}'
          AND date <= '{end}'"""
 
-# Query template for FORMA alert count by GeoJSON polygon and start/end dates.
-# (table, start, end, geojson)
 GEOJSON_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
 FROM
@@ -77,6 +94,19 @@ def analyze(params):
         query = GEOJSON_SQL.format(**params)
     else:
         query = ISO_SQL.format(**params)
+    result = cdb.execute(query)
+    if result:
+        result = json.loads(result)['rows'][0]
+    return result
+
+
+def subsription(params):
+    geom = params.get('geom')
+    if geom:
+        params['geom'] = json.dumps(geom)
+        query = GEOJSON_SUB_SQL.format(**params)
+    else:
+        query = ISO_SUB_SQL.format(**params)
     result = cdb.execute(query)
     if result:
         result = json.loads(result)['rows'][0]

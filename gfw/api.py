@@ -23,6 +23,7 @@ import json
 import logging
 import random
 import re
+import os
 import webapp2
 
 from gfw import cdb
@@ -31,6 +32,7 @@ from gfw import gcs
 from gfw import imazon
 from gfw import modis
 from gfw import stories
+from gfw import pubsub
 from gfw import wdpa
 from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
@@ -279,6 +281,39 @@ class CountryApi(BaseApi):
             entry.put()
         self._send_response(entry.value)
 
+
+class PubSubApi(BaseApi):
+
+    def _get_auth_token(self):
+        path = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), 'pubtoken.txt')
+        return open(path, 'r').read()
+
+    def _authorized(self, params):
+        auth = params['token'] == self._get_auth_token()
+        if not auth:
+            self.response.set_status(401)
+        return auth
+
+    def subscribe(self):
+        params = self._get_params(body=True)
+        if self._authorized(params):
+            params.pop('token')
+            pubsub.subscribe(params)
+            self.response.set_status(201)
+
+    def unsubscribe(self):
+        params = self._get_params(body=True)
+        if self._authorized(params):
+            params.pop('token')
+            pubsub.unsubscribe(params)
+
+    def publish(self):
+        params = self._get_params(body=True)
+        if self._authorized(params):
+            params.pop('token')
+            pubsub.publish(params)
+
 routes = [
     webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
                   handler_method='analyze'),
@@ -296,6 +331,21 @@ routes = [
                   handler_method='site'),
     webapp2.Route(CREATE_STORY_EMAILS, handler=StoriesApi,
                   handler_method='_send_new_story_emails',
+                  methods=['POST']),
+    webapp2.Route(r'/pubsub/publish', handler=pubsub.Publisher,
+                  handler_method='post',
+                  methods=['POST']),
+    webapp2.Route(r'/pubsub/notify', handler=pubsub.Notifier,
+                  handler_method='post',
+                  methods=['POST']),
+    webapp2.Route(r'/subscribe', handler=PubSubApi,
+                  handler_method='subscribe',
+                  methods=['POST']),
+    webapp2.Route(r'/unsubscribe', handler=PubSubApi,
+                  handler_method='unsubscribe',
+                  methods=['POST']),
+    webapp2.Route(r'/publish', handler=PubSubApi,
+                  handler_method='publish',
                   methods=['POST'])
 ]
 
