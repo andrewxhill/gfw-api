@@ -125,36 +125,3 @@ class Publisher(webapp2.RequestHandler):
                     params=dict(notification=n.key.urlsafe(), dry_run=dry_run))
         e.multicasted = True
         e.put()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
