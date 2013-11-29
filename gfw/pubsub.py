@@ -87,7 +87,7 @@ def subscribe(params):
     s = Subscription(topic=topic, email=email, params=params).put()
     reply_to = 'sub+%s@gfw-apis.appspotmail.com' % s.urlsafe()
     mail.send_mail(
-        sender='eightysteele@gmail.com',
+        sender=reply_to,
         to=email,
         reply_to=reply_to,
         subject='You subscribed to Global Forest Watch',
