@@ -21,6 +21,9 @@ runtime: python27
 threadsafe: true
 api_version: 1
 
+inbound_services:
+- mail
+
 libraries:
 - name: jinja2
   version: "latest"
@@ -29,6 +32,11 @@ libraries:
 
 handlers:
 
+- url: /_ah/mail/sub\+.*@gfw-apis\.appspotmail\.com
+  script: gfw.pubsub.handlers
+  login: admin  
+
 - url: /.*
   script: gfw.api.handlers
+
 

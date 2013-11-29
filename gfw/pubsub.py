@@ -24,18 +24,20 @@ from gfw import forma
 from google.appengine.ext import ndb
 from google.appengine.api import mail
 from google.appengine.api import taskqueue
+from google.appengine.ext.webapp.mail_handlers import InboundMailHandler
 
 
 class Subscription(ndb.Model):
     topic = ndb.StringProperty()
     email = ndb.StringProperty()
     params = ndb.JsonProperty()
+    confirmed = ndb.BooleanProperty(default=False)
     created = ndb.DateTimeProperty(auto_now_add=True)
 
     @classmethod
     def get_by_topic(cls, topic):
-        """Return all Subscription entities for supplied topic."""
-        return cls.query(cls.topic == topic).iter()
+        """Return all confirmed Subscription entities for supplied topic."""
+        return cls.query(cls.topic == topic, cls.confirmed == True).iter()
 
     @classmethod
     def unsubscribe(cls, topic, email):
@@ -82,12 +84,31 @@ def publish(params, dry_run=True):
 
 def subscribe(params):
     topic, email = map(params.get, ['topic', 'email'])
-    Subscription(topic=topic, email=email, params=params).put()
+    s = Subscription(topic=topic, email=email, params=params).put()
+    reply_to = 'sub+%s@gfw-apis.appspotmail.com' % s.urlsafe()
+    mail.send_mail(
+        sender='eightysteele@gmail.com',
+        to=email,
+        reply_to=reply_to,
+        subject='You subscribed to Global Forest Watch',
+        body="""To receive updates for %s just reply to this email.""" % topic)
 
 
 def unsubscribe(params):
     topic, email = map(params.get, ['topic', 'email'])
     Subscription.unsubscribe(topic, email)
+
+
+class Subscriber(InboundMailHandler):
+    def receive(self, message):
+        logging.info("Received a sub message : %s" % message)
+        if message.to.find('<') > -1:
+            urlsafe = message.to.split('<')[1].split('+')[1].split('@')[0]
+        else:
+            urlsafe = message.to.split('+')[1].split('@')[0]
+        s = ndb.Key(urlsafe=urlsafe).get()
+        s.confirmed = True
+        s.put()
 
 
 class Notifier(webapp2.RequestHandler):
@@ -102,7 +123,8 @@ class Notifier(webapp2.RequestHandler):
                           sort_keys=True, indent=4, separators=(',', ': '))
         logging.info("Notify %s to %s" % (n.topic, s['email']))
         mail.send_mail(
-            sender='eightysteele@gmail.com', to=s['email'],
+            sender='noreply@gfw-apis.appspotmail.com',
+            to=s['email'],
             subject='Global Forest Watch data notification',
             body=body)
 
@@ -125,3 +147,5 @@ class Publisher(webapp2.RequestHandler):
                     params=dict(notification=n.key.urlsafe(), dry_run=dry_run))
         e.multicasted = True
         e.put()
+
+handlers = webapp2.WSGIApplication([Subscriber.mapping()], debug=True)
