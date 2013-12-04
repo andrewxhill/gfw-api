@@ -103,7 +103,7 @@ ALERTS_COUNTRY = """SELECT countries.name, countries.iso, countries.enabled,
       SELECT COUNT(*) AS count, iso
       FROM cdm_latest
       WHERE date >= now() - INTERVAL '12 MONTHS'
-      AND iso = '{iso}'
+      AND iso ilike '{iso}'
       GROUP BY iso)
   AS alerts ON alerts.iso = countries.iso"""
 
