@@ -16,10 +16,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 application: gfw-apis
-version: v1
+version: wip
 runtime: python27
 threadsafe: true
 api_version: 1
+
+inbound_services:
+- mail
 
 libraries:
 - name: jinja2
@@ -29,6 +32,14 @@ libraries:
 
 handlers:
 
+- url: /_ah/mail/sub.*
+  script: gfw.pubsub.handlers
+  login: admin
+# - url: /_ah/mail/sub\+.*@gfw-apis\.appspotmail\.com
+#   script: gfw.pubsub.handlers
+#   login: admin  
+
 - url: /.*
   script: gfw.api.handlers
+
 
