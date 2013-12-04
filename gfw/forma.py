@@ -18,7 +18,6 @@
 """This module supports accessing FORMA data."""
 
 import json
-import logging
 from gfw import cdb
 
 ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
@@ -77,6 +76,53 @@ GEOJSON_GEOM_SQL = """SELECT *
      AND date <= '{end}'
      AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
         the_geom)"""
+
+ALERTS_ALL_COUNTRIES = """SELECT countries.name, countries.iso,
+  countries.enabled, alerts.count AS alerts_count
+  FROM gfw2_countries AS countries
+  LEFT OUTER JOIN (
+      SELECT COUNT(*) AS count, iso
+      FROM cdm_latest
+      WHERE date >= now() - INTERVAL '{interval}'
+      GROUP BY iso)
+  AS alerts ON alerts.iso = countries.iso"""
+
+ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
+  FROM gfw2_countries AS countries
+  LEFT OUTER JOIN (
+    SELECT COUNT(*) AS count, iso
+      FROM cdm_latest
+      WHERE date >= now() - INTERVAL '12 Months'
+      GROUP BY iso)
+  AS alerts ON alerts.iso = countries.iso"""
+
+ALERTS_COUNTRY = """SELECT countries.name, countries.iso, countries.enabled,
+  alerts.count AS alerts_count, alerts.iso
+  FROM gfw2_countries AS countries
+  RIGHT OUTER JOIN (
+      SELECT COUNT(*) AS count, iso
+      FROM cdm_latest
+      WHERE date >= now() - INTERVAL '12 MONTHS'
+      AND iso ilike '{iso}'
+      GROUP BY iso)
+  AS alerts ON alerts.iso = countries.iso"""
+
+
+def alerts(params):
+    query = ALERTS_ALL_COUNT.format(**params)
+    alerts_count = json.loads(
+        cdb.execute(query, params))['rows'][0]['alerts_count']
+    if 'iso' in params:
+        query = ALERTS_COUNTRY.format(**params)
+        result = cdb.execute(query, params)
+        if result:
+            result = json.loads(result)['rows']
+    else:
+        query = ALERTS_ALL_COUNTRIES.format(**params)
+        result = cdb.execute(query, params)
+        if result:
+            result = json.loads(result)['rows']
+    return dict(total_count=alerts_count, countries=result)
 
 
 def download(params):

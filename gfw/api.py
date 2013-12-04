@@ -256,29 +256,16 @@ class CountryApi(BaseApi):
     """Handler for countries."""
 
     def alerts(self):
-        args = self.request.arguments()
-        vals = map(self.request.get, args)
-        params = dict(zip(args, vals))
+        params = self._get_params()
         rid = self._get_id(params)
         if 'interval' not in params:
             params['interval'] = '12 MONTHS'
-        sql = """SELECT countries.name,
-             countries.iso,
-             countries.enabled,
-             alerts.count as alerts_count
-      FROM gfw2_countries as countries
-      LEFT OUTER JOIN (SELECT COUNT(*) as count,
-                              iso
-                       FROM cdm_latest
-                       WHERE date >= now() - INTERVAL '{interval}'
-                       GROUP BY iso) as alerts ON alerts.iso = countries.iso"""
         entry = Entry.get_by_id(rid)
         if not entry or self.request.get('bust'):
-            result = cdb.execute(sql.format(**params))
+            result = forma.alerts(params)
             if result:
-                value = json.loads(result)['rows']
-            entry = Entry(id=rid, value=json.dumps(value))
-            entry.put()
+                entry = Entry(id=rid, value=json.dumps(result))
+                entry.put()
         self._send_response(entry.value)
 
 
