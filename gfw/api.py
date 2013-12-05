@@ -26,7 +26,7 @@ import re
 import os
 import webapp2
 
-from gfw import cdb
+from gfw import countries
 from gfw import forma
 from gfw import gcs
 from gfw import imazon
@@ -69,6 +69,7 @@ def download(dataset, params):
 
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+COUNTRY_ROUTE = r'/countries'
 COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
 WDPA = r'/wdpa/sites'
 
@@ -255,6 +256,19 @@ class WdpaApi(BaseApi):
 class CountryApi(BaseApi):
     """Handler for countries."""
 
+    def get(self):
+        params = self._get_params()
+        rid = self._get_id(params)
+        if 'interval' not in params:
+            params['interval'] = '12 MONTHS'
+        entry = Entry.get_by_id(rid)
+        if not entry or self.request.get('bust'):
+            result = countries.get(params)
+            if result:
+                entry = Entry(id=rid, value=json.dumps(result))
+                entry.put()
+        self._send_response(entry.value)
+
     def alerts(self):
         params = self._get_params()
         rid = self._get_id(params)
@@ -308,6 +322,8 @@ routes = [
                   handler_method='download'),
     webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
                   handler_method='alerts'),
+    webapp2.Route(COUNTRY_ROUTE, handler=CountryApi,
+                  handler_method='get'),
     webapp2.Route(CREATE_STORY, handler=StoriesApi,
                   handler_method='create', methods=['POST']),
     webapp2.Route(LIST_STORIES, handler=StoriesApi,
