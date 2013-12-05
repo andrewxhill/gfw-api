@@ -20,6 +20,15 @@
 import json
 from gfw import cdb
 
+ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
+  FROM gfw2_countries AS countries
+  LEFT OUTER JOIN (
+    SELECT COUNT(*) AS count, iso
+      FROM cdm_latest
+      WHERE date >= now() - INTERVAL '12 Months'
+      GROUP BY iso)
+  AS alerts ON alerts.iso = countries.iso"""
+
 GET = """SELECT countries.carbon_stocks,
   countries.co2_emissions, countries.convention_cbd,
   countries.convention_cites, countries.convention_ilo,
@@ -48,16 +57,19 @@ GET = """SELECT countries.carbon_stocks,
 
 
 def get(params):
+    query = ALERTS_ALL_COUNT.format(**params)
+    alerts_count = json.loads(
+        cdb.execute(query, params))['rows'][0]['alerts_count']
     if 'iso' in params:
         params['and'] = "AND iso ilike '%s'" % params['iso']
         params['join'] = 'RIGHT'
     else:
         params['and'] = ''
         params['join'] = 'LEFT'
+    if not 'order' in params:
+        params['order'] = ''
     query = GET.format(**params)
     result = cdb.execute(query, params)
     if result:
         result = json.loads(result)['rows']
-    if 'iso' in params:
-        result = result[0]
-    return result
+    return dict(total_count=alerts_count, countries=result)
