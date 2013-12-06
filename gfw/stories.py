@@ -34,13 +34,13 @@ INSERT = """INSERT INTO {table}
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media, token"""
  
 LIST = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
+    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coordinates, media
 FROM {table}
 WHERE visible = True {and_where}"""
  
  
 GET = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
+    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coordinates, media
 FROM {table}
 WHERE cartodb_id = {id}"""
  
