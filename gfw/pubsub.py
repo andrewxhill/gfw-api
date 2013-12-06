@@ -117,7 +117,6 @@ class Notifier(webapp2.RequestHandler):
         n = ndb.Key(urlsafe=self.request.get('notification')).get()
         e = n.params['event']
         s = n.params['subscription']
-        # dry_run = self.request.get('dry_run')
         result = forma.subsription(s)
         body = json.dumps(dict(event=e, subscription=s, notification=result),
                           sort_keys=True, indent=4, separators=(',', ': '))

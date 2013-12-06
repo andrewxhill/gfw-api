@@ -4,3 +4,5 @@
 spec.txt	
 cdb.txt
 pubtoken.txt
+dev.json
+prod.json

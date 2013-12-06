@@ -17,6 +17,7 @@
 
 """This module provides App Engine configurations."""
 
+import json
 import os
 import sys
 
@@ -25,4 +26,28 @@ def fix_path():
     sys.path.append(os.path.join(os.path.dirname(__file__), 'lib'))
     sys.path.append(os.path.join(os.path.dirname(__file__), 'gfw'))
 
+
 fix_path()
+
+
+def _load_config(name):
+    """Return dev config environment as dictionary."""
+    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), name)
+    try:
+        return json.loads(open(path, "r").read())
+    except:
+        return {}
+
+IS_DEV = 'Development' in os.environ['SERVER_SOFTWARE']
+
+if IS_DEV:
+    APP_BASE_URL = 'http://localhost:8080'
+    runtime_config = _load_config('dev.json')
+else:
+    APP_BASE_URL = 'http://gfw-apis.appspot.com'
+    runtime_config = _load_config('prod.json')
+
+
+runtime_config['APP_BASE_URL'] = APP_BASE_URL
+runtime_config['IS_DEV'] = IS_DEV
+
