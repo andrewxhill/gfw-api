@@ -21,7 +21,7 @@ import json
 import logging
 from gfw import cdb
 
-INSERT = """INSERT INTO community_stories
+INSERT = """INSERT INTO stories_dev
   (details, email, featured, name, title, token, visible, date, location,
    the_geom, media)
   VALUES
@@ -32,14 +32,14 @@ INSERT = """INSERT INTO community_stories
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media, token"""
 
 LIST = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
-FROM community_stories
+    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coords, media
+FROM stories_dev
 WHERE visible = True {and_where}"""
 
 
 GET = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
-FROM community_stories
+    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coords, media
+FROM stories_dev
 WHERE cartodb_id = {id}"""
 
 
