@@ -70,7 +70,6 @@ def download(dataset, params):
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
 DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
 COUNTRY_ROUTE = r'/countries'
-COUNTRY_ALERTS_ROUTE = r'/countries/alerts'
 WDPA = r'/wdpa/sites'
 
 # Stories API
@@ -121,10 +120,10 @@ class BaseApi(webapp2.RequestHandler):
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
+        self.response.headers.add_header("Content-Type", "application/json")
         if not data:
             self.response.out.write('{}')
             return
-        self.response.headers.add_header("Content-Type", "application/json")
         self.response.out.write(data)
 
     def _get_id(self, params):
@@ -264,23 +263,11 @@ class CountryApi(BaseApi):
         entry = Entry.get_by_id(rid)
         if not entry or self.request.get('bust'):
             result = countries.get(params)
+            logging.info(result['countries'][0])
             if result:
                 entry = Entry(id=rid, value=json.dumps(result))
                 entry.put()
-        self._send_response(entry.value)
-
-    def alerts(self):
-        params = self._get_params()
-        rid = self._get_id(params)
-        if 'interval' not in params:
-            params['interval'] = '12 MONTHS'
-        entry = Entry.get_by_id(rid)
-        if not entry or self.request.get('bust'):
-            result = forma.alerts(params)
-            if result:
-                entry = Entry(id=rid, value=json.dumps(result))
-                entry.put()
-        self._send_response(entry.value)
+        self._send_response(json.dumps(result) if result else None)
 
 
 class PubSubApi(BaseApi):
@@ -320,8 +307,6 @@ routes = [
                   handler_method='analyze'),
     webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
                   handler_method='download'),
-    webapp2.Route(COUNTRY_ALERTS_ROUTE, handler=CountryApi,
-                  handler_method='alerts'),
     webapp2.Route(COUNTRY_ROUTE, handler=CountryApi,
                   handler_method='get'),
     webapp2.Route(CREATE_STORY, handler=StoriesApi,
