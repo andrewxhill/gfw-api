@@ -263,7 +263,6 @@ class CountryApi(BaseApi):
         entry = Entry.get_by_id(rid)
         if not entry or self.request.get('bust'):
             result = countries.get(params)
-            logging.info(result['countries'][0])
             if result:
                 entry = Entry(id=rid, value=json.dumps(result))
                 entry.put()
