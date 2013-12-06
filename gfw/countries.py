@@ -71,5 +71,5 @@ def get(params):
     query = GET.format(**params)
     result = cdb.execute(query, params)
     if result:
-        result = json.loads(result)['rows']
+        result = json.loads(result)['rows'][0]
     return dict(total_count=alerts_count, countries=result)

@@ -123,8 +123,8 @@ class BaseApi(webapp2.RequestHandler):
         self.response.headers.add_header("Content-Type", "application/json")
         if not data:
             self.response.out.write('{}')
-            return
-        self.response.out.write(data)
+        else:
+            self.response.out.write(data)
 
     def _get_id(self, params):
         whitespace = re.compile(r'\s+')
@@ -261,12 +261,12 @@ class CountryApi(BaseApi):
         if 'interval' not in params:
             params['interval'] = '12 MONTHS'
         entry = Entry.get_by_id(rid)
-        if not entry or self.request.get('bust'):
+        if not entry or params.get('bust'):
             result = countries.get(params)
             if result:
                 entry = Entry(id=rid, value=json.dumps(result))
                 entry.put()
-        self._send_response(json.dumps(result) if result else None)
+        self._send_response(entry.value if entry else None)
 
 
 class PubSubApi(BaseApi):
