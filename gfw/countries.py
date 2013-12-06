@@ -56,6 +56,16 @@ GET = """SELECT countries.carbon_stocks,
   ORDER BY countries.name {order}"""
 
 
+def _clean_links(country):
+    """Return copy of country dict with all <a> tags removed from links."""
+    clean = {}
+    for key, val in country.iteritems():
+        if val and type(val) is unicode and '<a href' in val:
+            val = val.split('href="')[1].split('"')[0]
+        clean[key] = val
+    return clean
+
+
 def get(params):
     query = ALERTS_ALL_COUNT.format(**params)
     alerts_count = json.loads(
@@ -71,5 +81,6 @@ def get(params):
     query = GET.format(**params)
     result = cdb.execute(query, params)
     if result:
-        result = json.loads(result)['rows'][0]
-    return dict(total_count=alerts_count, countries=result)
+        result = json.loads(result)['rows']
+        countries = map(_clean_links, result)
+    return dict(total_count=alerts_count, countries=countries)
