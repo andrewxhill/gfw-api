@@ -14,14 +14,16 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
+ 
 """This module supports stories."""
-
+ 
 import json
-import logging
+from appengine_config import runtime_config
 from gfw import cdb
-
-INSERT = """INSERT INTO stories_dev
+ 
+TABLE = 'stories_dev' if runtime_config.get('IS_DEV') else 'community_stories'
+ 
+INSERT = """INSERT INTO {table}
   (details, email, featured, name, title, token, visible, date, location,
    the_geom, media)
   VALUES
@@ -30,40 +32,39 @@ INSERT = """INSERT INTO stories_dev
    ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326), '{media}')
   RETURNING details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media, token"""
-
+ 
 LIST = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coords, media
-FROM stories_dev
+    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
+FROM {table}
 WHERE visible = True {and_where}"""
-
-
+ 
+ 
 GET = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coords, media
-FROM stories_dev
+    location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media
+FROM {table}
 WHERE cartodb_id = {id}"""
-
-
+ 
+ 
 def _prep_story(story):
-    logging.info("STORY %s" % story)
     if 'geom' in story:
         story['geom'] = json.loads(story['geom'])
     if 'media' in story:
         story['media'] = json.loads(story['media'])
     return story
-
-
+ 
+ 
 def create(params):
     """Create new story with params."""
     props = dict(details='', email='', featured='False', name='',
                  title='', token='', visible='True', date='null',
-                 location='', geom='', media='[]')
+                 location='', geom='', media='[]', table=TABLE)
     props.update(params)
     props['geom'] = json.dumps(props['geom'])
     if 'media' in props:
         props['media'] = json.dumps(props['media'])
     return cdb.execute(INSERT.format(**props), api_key=True)
-
-
+ 
+ 
 def list(params):
     and_where = ''
     if 'geom' in params:
@@ -73,22 +74,19 @@ def list(params):
         and_where += """ AND date >= '{since}'::date"""
     if and_where:
         and_where = and_where.format(**params)
-    result = cdb.execute(LIST.format(and_where=and_where), api_key=True)
+    result = cdb.execute(
+        LIST.format(and_where=and_where, table=TABLE), api_key=True)
     if result:
         data = json.loads(result)
         if 'total_rows' in data and data['total_rows'] > 0:
             return map(_prep_story, data['rows'])
-
-
+ 
+ 
 def get(params):
+    params['table'] = TABLE
     result = cdb.execute(GET.format(**params), api_key=True)
     if result:
         data = json.loads(result)
         if 'total_rows' in data and data['total_rows'] == 1:
             story = data['rows'][0]
             return _prep_story(story)
-            # if 'geom' in story:
-            #     story['geom'] = json.loads(story['geom'])
-            # if 'media' in story:
-            #     story['media'] = json.loads(story['media'])
-            # return story

@@ -34,6 +34,7 @@ from gfw import modis
 from gfw import stories
 from gfw import pubsub
 from gfw import wdpa
+from appengine_config import runtime_config
 from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
 from google.appengine.api import mail
@@ -154,34 +155,23 @@ class StoriesApi(BaseApi):
     def _send_new_story_emails(self):
         story = self._get_params()
 
-        wri_email = 'eightysteele@gmail.com'
-        # TODO: Change to gfw@wri.org
-
         # Email WRI:
         subject = 'A new story has been registered with Global Forest Watch'
-        sender = 'Global Forest Watch Stories <%s>' % wri_email
-        reply_to = 'Global Forest Watch Stories <gfw@wri.org>'
-
-        # For production:
-        # to = ['janderson@wri.org', 'gfw@wri.org', 'sminnemeyer@wri.org',
-        #       'aleach@wri.org']
-
-        to = ['eightysteele@gmail.com']  # For testing
+        sender = \
+            'Global Forest Watch Stories <noreply@gfw-apis.appspotmail.com>'
+        to = runtime_config.get('wri_emails_stories')
         story_url = 'http://gfw-beta.org/stories/%s' % story['id']
         api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
         token = story['token']
         body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
             (story_url, api_url, token)
-        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
-                       reply_to=reply_to)
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body)
 
         # Email user:
         subject = 'Your story has been registered with Global Forest Watch!'
-        sender = 'Global Forest Watch Stories <%s>' % wri_email
         to = '%s <%s>' % (story['name'], story['email'])
         body = 'Here is your story: %s' % story_url
-        mail.send_mail(sender=sender, to=to, subject=subject, body=body,
-                       reply_to=reply_to)
+        mail.send_mail(sender=sender, to=to, subject=subject, body=body)
 
     def _gen_token(self):
         return base64.b64encode(
