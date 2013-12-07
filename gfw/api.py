@@ -121,9 +121,9 @@ class BaseApi(webapp2.RequestHandler):
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
-        self.response.headers.add_header("Content-Type", "application/json")
+        self.response.headers["Content-Type"] = "application/json"
         if not data:
-            self.response.out.write('{}')
+            self.response.out.write('')
         else:
             self.response.out.write(data)
 
