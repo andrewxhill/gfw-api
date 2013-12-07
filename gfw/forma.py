@@ -92,7 +92,7 @@ ALERTS_ALL_COUNTRIES = """SELECT countries.carbon_stocks,
   countries.national_policy_title, countries.tenure_government,
   countries.tenure_owned, countries.tenure_owned_individuals,
   countries.tenure_reserved, countries.type_planted, countries.type_primary,
-  countries.lat || ',' || countries.lng AS coordinates,
+  countries.lat, countries.lng,
   countries.type_regenerated, alerts.count AS alerts_count
   FROM gfw2_countries AS countries
   LEFT OUTER JOIN (
@@ -126,7 +126,7 @@ ALERTS_COUNTRY = """SELECT countries.carbon_stocks,
   countries.national_policy_title, countries.tenure_government,
   countries.tenure_owned, countries.tenure_owned_individuals,
   countries.tenure_reserved, countries.type_planted, countries.type_primary,
-  countries.lat || ',' || countries.lng AS coordinates,
+  countries.lat, countries.lng,
   countries.type_regenerated, alerts.count AS alerts_count, alerts.iso
   FROM gfw2_countries AS countries
   RIGHT OUTER JOIN (
