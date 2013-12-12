@@ -44,7 +44,7 @@ GET = """SELECT countries.carbon_stocks,
   countries.national_policy_title, countries.tenure_government,
   countries.tenure_owned, countries.tenure_owned_individuals,
   countries.tenure_reserved, countries.type_planted, countries.type_primary,
-  countries.lat, countries.lng,
+  countries.lat, countries.lng, countries.indepth,
   countries.type_regenerated, alerts.count AS alerts_count
   FROM gfw2_countries AS countries
   {join} OUTER JOIN (
