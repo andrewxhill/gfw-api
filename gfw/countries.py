@@ -29,6 +29,34 @@ ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
       GROUP BY iso)
   AS alerts ON alerts.iso = countries.iso"""
 
+
+HAS_ALERTS = """SELECT COUNT(*)
+  FROM cdm_latest
+  WHERE iso ilike '{iso}'"""
+
+
+GET_NO_ALERTS = GET = """SELECT countries.carbon_stocks,
+  countries.co2_emissions, countries.convention_cbd,
+  countries.convention_cites, countries.convention_ilo,
+  countries.convention_itta, countries.convention_kyoto,
+  countries.convention_nlbi, countries.convention_ramsar,
+  countries.convention_unccd, countries.convention_unfccc,
+  countries.convention_world_heritage, countries.dataset_link,
+  countries.emissions_land, countries.emissions_noland,
+  countries.employment, countries.enabled, countries.external_links,
+  countries.forest_extent, countries.gdp_percent, countries.gdp_percent_fixed,
+  countries.gross_value, countries.iso, countries.ministry_link,
+  countries.name, countries.national_policy_link,
+  countries.national_policy_title, countries.tenure_government,
+  countries.tenure_owned, countries.tenure_owned_individuals,
+  countries.tenure_reserved, countries.type_planted, countries.type_primary,
+  countries.lat, countries.lng, countries.indepth,
+  countries.type_regenerated
+  FROM gfw2_countries AS countries
+  WHERE iso ilike '{iso}'
+  ORDER BY countries.name {order}"""
+
+
 GET = """SELECT countries.carbon_stocks,
   countries.co2_emissions, countries.convention_cbd,
   countries.convention_cites, countries.convention_ilo,
@@ -57,19 +85,29 @@ GET = """SELECT countries.carbon_stocks,
   ORDER BY countries.name {order}"""
 
 
+def has_alerts(params):
+    return json.loads(
+        cdb.execute(
+            HAS_ALERTS.format(**params)))['rows'][0]['count'] != 0
+
+
 def get(params):
     query = ALERTS_ALL_COUNT.format(**params)
     alerts_count = json.loads(
         cdb.execute(query, params))['rows'][0]['alerts_count']
-    if 'iso' in params:
-        params['and'] = "AND iso ilike '%s'" % params['iso']
-        params['join'] = 'RIGHT'
-    else:
-        params['and'] = ''
-        params['join'] = 'LEFT'
     if not 'order' in params:
         params['order'] = ''
-    query = GET.format(**params)
+    if 'iso' in params:
+        if has_alerts(params):  # Has forma alerts:
+            params['and'] = "AND iso ilike '%s'" % params['iso']
+            params['join'] = 'RIGHT'
+            query = GET.format(**params)
+        else:  # No forma alerts:
+            query = GET_NO_ALERTS.format(**params)
+    else:  # List all countries:
+        params['and'] = ''
+        params['join'] = 'LEFT'
+        query = GET.format(**params)
     result = cdb.execute(query, params)
     if result:
         countries = json.loads(result)['rows']
