@@ -43,13 +43,18 @@ def get_format(media_type):
         return tokens[2].split('+')[0]
 
 
-def execute(query, params={}, api_key=False):
-    """Exectues supplied query on CartoDB and returns response body as JSON."""
-    rpc = urlfetch.create_rpc(deadline=60)
+def get_url(query, params, api_key):
+    """Return CartoDB query URL for supplied params."""
     params['q'] = query
     if api_key:
         params['api_key'] = _get_api_key()
-    url = '%s?%s' % (ENDPOINT, urllib.urlencode(params))
+    return '%s?%s' % (ENDPOINT, urllib.urlencode(params))
+
+
+def execute(query, params={}, api_key=False):
+    """Exectues supplied query on CartoDB and returns response body as JSON."""
+    rpc = urlfetch.create_rpc(deadline=60)
+    url = get_url(query, params, api_key)
     logging.info(url)
     urlfetch.make_fetch_call(rpc, url)
     try:
@@ -58,3 +63,6 @@ def execute(query, params={}, api_key=False):
             return result.content
     except urlfetch.DownloadError, e:
         logging.error("CartoDB SQL API Error: %s %s" % (e, query))
+    except urlfetch.ResponseTooLargeError, e:
+        logging.error("CartoDB result too big: %s %s" % (e, url))
+        raise e

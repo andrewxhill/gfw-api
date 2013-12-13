@@ -19,6 +19,7 @@
 
 import json
 from gfw import cdb
+from google.appengine.api import urlfetch
 
 ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
@@ -161,7 +162,10 @@ def download(params):
         query = GEOJSON_GEOM_SQL.format(**params)
     else:
         query = ISO_GEOM_SQL.format(**params)
-    return cdb.execute(query, params)
+    try:
+        return cdb.execute(query, params)
+    except urlfetch.ResponseTooLargeError:
+        return cdb.get_url(query, params, None)
 
 
 def analyze(params):
