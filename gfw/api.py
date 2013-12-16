@@ -99,6 +99,10 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
         entry = Entry.get_by_id(rid)
         if not entry or params.get('bust'):
             data = download(dataset, params)
+            logging.info("DOWNLOAD %s" % data)
+            if data and data.startswith('http://'):
+                entry = Entry(id=rid, value=data)
+                entry.put()
             if data:
                 content_type = CONTENT_TYPES[format]
                 gcs_path = gcs.create_file(data, rid, content_type)
@@ -106,7 +110,10 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
                 entry = Entry(id=rid, value=value)
                 entry.put()
         if entry.value:
-            self.send_blob(entry.value)
+            if entry.value.startswith('http://'):
+                self.redirect(entry.value)
+            else:
+                self.send_blob(entry.value)
         else:
             self.error(404)
 
