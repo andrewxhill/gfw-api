@@ -96,7 +96,7 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
         params['format'] = format
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust'):
+        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             data = download(dataset, params)
             logging.info("DOWNLOAD %s" % data)
             if data and data.startswith('http://'):
@@ -228,7 +228,7 @@ class AnalyzeApi(BaseApi):
         params = dict(zip(args, vals))
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust'):
+        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             value = analyze(dataset, params)
             entry = Entry(id=rid, value=json.dumps(value))
             entry.put()
@@ -240,7 +240,7 @@ class WdpaApi(BaseApi):
         params = self._get_params()
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust'):
+        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             site = wdpa.get_site(params)
             if site:
                 entry = Entry(id=rid, value=json.dumps(site))
@@ -257,7 +257,7 @@ class CountryApi(BaseApi):
         if 'interval' not in params:
             params['interval'] = '12 MONTHS'
         entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust'):
+        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             result = countries.get(params)
             if result:
                 entry = Entry(id=rid, value=json.dumps(result))
