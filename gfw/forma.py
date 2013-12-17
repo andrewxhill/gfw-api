@@ -79,13 +79,12 @@ GEOJSON_GEOM_SQL = """SELECT *
         the_geom)"""
 
 ALERTS_ALL_COUNTRIES = """SELECT countries.carbon_stocks,
-  countries.co2_emissions, countries.convention_cbd,
+  countries.emissions, countries.convention_cbd,
   countries.convention_cites, countries.convention_ilo,
   countries.convention_itta, countries.convention_kyoto,
   countries.convention_nlbi, countries.convention_ramsar,
   countries.convention_unccd, countries.convention_unfccc,
   countries.convention_world_heritage, countries.dataset_link,
-  countries.emissions_land, countries.emissions_noland,
   countries.employment, countries.enabled, countries.external_links,
   countries.forest_extent, countries.gdp_percent, countries.gdp_percent_fixed,
   countries.gross_value, countries.iso, countries.ministry_link,
@@ -113,13 +112,12 @@ ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
   AS alerts ON alerts.iso = countries.iso"""
 
 ALERTS_COUNTRY = """SELECT countries.carbon_stocks,
-  countries.co2_emissions, countries.convention_cbd,
+  countries.emissions, countries.convention_cbd,
   countries.convention_cites, countries.convention_ilo,
   countries.convention_itta, countries.convention_kyoto,
   countries.convention_nlbi, countries.convention_ramsar,
   countries.convention_unccd, countries.convention_unfccc,
   countries.convention_world_heritage, countries.dataset_link,
-  countries.emissions_land, countries.emissions_noland,
   countries.employment, countries.enabled, countries.external_links,
   countries.forest_extent, countries.gdp_percent, countries.gdp_percent_fixed,
   countries.gross_value, countries.iso, countries.ministry_link,
