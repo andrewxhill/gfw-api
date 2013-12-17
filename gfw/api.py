@@ -23,7 +23,6 @@ import json
 import logging
 import random
 import re
-import os
 import webapp2
 
 from gfw import countries
@@ -268,35 +267,21 @@ class CountryApi(BaseApi):
 
 class PubSubApi(BaseApi):
 
-    def _get_auth_token(self):
-        path = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), 'pubtoken.txt')
-        return open(path, 'r').read()
-
-    def _authorized(self, params):
-        auth = params['token'] == self._get_auth_token()
-        if not auth:
-            self.response.set_status(401)
-        return auth
-
     def subscribe(self):
         params = self._get_params(body=True)
-        if self._authorized(params):
-            params.pop('token')
-            pubsub.subscribe(params)
-            self.response.set_status(201)
+        pubsub.subscribe(params)
+        self.response.set_status(201)
+        self._send_response(json.dumps(dict(subscribe=True)))
 
     def unsubscribe(self):
         params = self._get_params(body=True)
-        if self._authorized(params):
-            params.pop('token')
-            pubsub.unsubscribe(params)
+        pubsub.unsubscribe(params)
+        self._send_response(json.dumps(dict(unsubscribe=True)))
 
     def publish(self):
         params = self._get_params(body=True)
-        if self._authorized(params):
-            params.pop('token')
-            pubsub.publish(params)
+        pubsub.publish(params)
+        self._send_response(json.dumps(dict(publish=True)))
 
 routes = [
     webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
