@@ -80,6 +80,17 @@ GET_STORY = r'/stories/<id:\d+>'
 
 
 class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
+
+    def _redirect(self, url):
+        """Sends supplied result dictionnary as JSON response."""
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.response.headers.add_header('charset', 'utf-8')
+        self.response.headers["Content-Type"] = "application/json"
+        self.redirect(str(url))
+
     def _get_id(self, params):
         path, format = self.request.path.lower().split('.')
         logging.info('FORMAT %s' % format)
@@ -99,18 +110,19 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             data = download(dataset, params)
             logging.info("DOWNLOAD %s" % data)
-            if data and data.startswith('http://'):
-                entry = Entry(id=rid, value=data)
-                entry.put()
             if data:
-                content_type = CONTENT_TYPES[format]
-                gcs_path = gcs.create_file(data, rid, content_type)
-                value = blobstore.create_gs_key(gcs_path)
-                entry = Entry(id=rid, value=value)
-                entry.put()
+                if data.startswith('http://'):
+                    entry = Entry(id=rid, value=data)
+                    entry.put()
+                else:
+                    content_type = CONTENT_TYPES[format]
+                    gcs_path = gcs.create_file(data, rid, content_type)
+                    value = blobstore.create_gs_key(gcs_path)
+                    entry = Entry(id=rid, value=value)
+                    entry.put()
         if entry.value:
             if entry.value.startswith('http://'):
-                self.redirect(entry.value)
+                self._redirect(entry.value)
             else:
                 self.send_blob(entry.value)
         else:
