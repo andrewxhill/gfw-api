@@ -21,6 +21,7 @@ import json
 import logging
 import webapp2
 from gfw import forma
+from appengine_config import runtime_config
 from google.appengine.ext import ndb
 from google.appengine.api import mail
 from google.appengine.api import taskqueue
@@ -86,12 +87,15 @@ def subscribe(params):
     topic, email = map(params.get, ['topic', 'email'])
     s = Subscription(topic=topic, email=email, params=params).put()
     reply_to = 'sub+%s@gfw-apis.appspotmail.com' % s.urlsafe()
+    conf_url = '%s/pubsub/confirm?token=%s' % \
+        (runtime_config['APP_BASE_URL'], s.urlsafe())
     mail.send_mail(
         sender=reply_to,
         to=email,
         reply_to=reply_to,
         subject='You subscribed to Global Forest Watch',
-        body="""To receive updates for %s just reply to this email.""" % topic)
+        body="""To receive updates for %s just reply to this email or click
+here:\n%s""" % (topic, conf_url))
 
 
 def unsubscribe(params):
@@ -126,6 +130,29 @@ class Notifier(webapp2.RequestHandler):
             to=s['email'],
             subject='Global Forest Watch data notification',
             body=body)
+
+
+class Confirmer(webapp2.RequestHandler):
+    def get(self):
+        urlsafe = self.request.get('token')
+        if not urlsafe:
+            self.error(404)
+            return
+        try:
+            s = ndb.Key(urlsafe=urlsafe).get()
+        except:
+            self.error(404)
+            return
+        if not s:
+            self.error(404)
+            return
+        if s.confirmed:
+            self.error(404)
+            return
+        else:
+            s.confirmed = True
+            s.put()
+        self.response.write('Subscription confirmed!')
 
 
 class Publisher(webapp2.RequestHandler):
