@@ -27,6 +27,7 @@ import webapp2
 
 from gfw import countries
 from gfw import forma
+from gfw import hansen
 from gfw import gcs
 from gfw import imazon
 from gfw import modis
@@ -54,6 +55,8 @@ def analyze(dataset, params):
         return forma.analyze(params)
     elif dataset == 'modis':
         return modis.analyze(params)
+    elif dataset == 'hansen':
+        return hansen.analyze(params)
     return None
 
 
@@ -235,9 +238,7 @@ class AnalyzeApi(BaseApi):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
     def analyze(self, dataset):
-        args = self.request.arguments()
-        vals = map(self.request.get, args)
-        params = dict(zip(args, vals))
+        params = self._get_params()
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
@@ -275,6 +276,7 @@ class CountryApi(BaseApi):
                 entry = Entry(id=rid, value=json.dumps(result))
                 entry.put()
         self._send_response(entry.value if entry else None)
+
 
 
 class PubSubApi(BaseApi):
