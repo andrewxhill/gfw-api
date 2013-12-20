@@ -31,8 +31,13 @@ def _loss(params):
     loss_by_year = ee.Image('HANSEN/gfw_loss_by_year')
     poly = _get_coords(json.loads(params.get('geom')))
     region = ee.Geometry.Polygon(poly)
+    reducer = ee.reduceRegion(
+        reducer=ee.Reducer.sum(),
+        geometry=region,
+        scale=90,
+        bestEffort=True)
     reduce_args = {
-        'reducer': ee.Reducer.sum(),
+        'reducer': reducer,
         'geometry': region,
         'scale': 30,
         'bestEffort': True,
