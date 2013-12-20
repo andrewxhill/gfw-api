@@ -18,6 +18,7 @@
 """This module supports accessing hansen data."""
 
 import ee
+import config
 
 
 def _get_coords(geojson):
@@ -25,6 +26,7 @@ def _get_coords(geojson):
 
 
 def _loss(params):
+    ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image('HANSEN/gfw_loss_by_year')
     poly = _get_coords(params.get('geom'))
     region = ee.Geometry.Polygon(poly)
