@@ -1,6 +1,19 @@
 import os
 import ee
+import json
+import logging
 from oauth2client.appengine import AppAssertionCredentials
+
+
+def _load_asset_ids():
+    """Return private EE asset ids as dictionary."""
+    path = os.path.join(os.path.abspath(
+        os.path.dirname(__file__)), 'ee_asset_ids.json')
+    try:
+        logging.info('PATH %s' % path)
+        return json.loads(open(path, "r").read())
+    except:
+        return {}
 
 # The URL of the Earth Engine API.
 EE_URL = 'https://earthengine.googleapis.com'
@@ -25,3 +38,5 @@ if DEBUG_MODE:
         EE_ACCOUNT, EE_PRIVATE_KEY_FILE)
 else:
     EE_CREDENTIALS = AppAssertionCredentials(ee.OAUTH2_SCOPE)
+
+assets = _load_asset_ids()

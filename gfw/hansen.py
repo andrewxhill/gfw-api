@@ -29,7 +29,7 @@ def _get_coords(geojson):
 
 def _loss(params):
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
-    loss_by_year = ee.Image('HANSEN/gfw_loss_by_year')
+    loss_by_year = ee.Image(config.assets['hansen_loss'])
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
@@ -51,7 +51,6 @@ def _loss(params):
         'geometry': region
     }
     reduce_args.update(params)
-    logging.info('REDUCER PARAMS %s' % reduce_args)
     area_stats = loss_by_year.divide(1000 * 1000 * 255.0) \
         .multiply(ee.Image.pixelArea()) \
         .reduceRegion(**reduce_args)
