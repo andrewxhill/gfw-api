@@ -19,6 +19,7 @@
 
 import json
 import ee
+import logging
 import config
 
 
@@ -30,6 +31,10 @@ def _loss(params):
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image('HANSEN/gfw_loss_by_year')
     poly = _get_coords(json.loads(params.get('geom')))
+    params.pop('geom')
+    params.pop('layer')
+    params['maxPixels'] = int(params['maxPixels'])
+    params['tileScale'] = int(params['tileScale'])
     region = ee.Geometry.Polygon(poly)
     reduce_args = {
         'reducer': ee.Reducer.sum(),
@@ -37,15 +42,20 @@ def _loss(params):
         'scale': 90,
         'bestEffort': True,
     }
+    reduce_args.update(params)
+    logging.info('REDUCER PARAMS %s' % reduce_args)
     area_stats = loss_by_year.divide(1000 * 1000 * 255.0) \
         .multiply(ee.Image.pixelArea()) \
-        .reduceRegion(reduce_args)
+        .reduceRegion(**reduce_args)
     area_results = area_stats.getInfo()
-    area = ee.Image.pixelArea().reduceRegion(reduce_args).get('area')
-    percent_results = loss_by_year.multiply(100.0 / 255.0) \
+    area = ee.Image.pixelArea().reduceRegion(**reduce_args).get('area')
+    percent_stats = loss_by_year.multiply(100.0 / 255.0) \
         .divide(ee.Image.constant(area)) \
         .multiply(ee.Image.pixelArea()) \
-        .reduceRegion(reduce_args)
+        .reduceRegion(**reduce_args)
+    percent_results = percent_stats.getInfo()
+    logging.info(area_results)
+    logging.info(percent_results)
     return dict(area=area_results, percent=percent_results)
 
 
