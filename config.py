@@ -6,7 +6,8 @@ from oauth2client.appengine import AppAssertionCredentials
 EE_URL = 'https://earthengine.googleapis.com'
 
 # The service account email address authorized by your Google contact.
-EE_ACCOUNT = 'gfw-apis@appspot.gserviceaccount.com'
+EE_ACCOUNT = '872868960419@developer.gserviceaccount.com'
+#'gfw-apis@appspot.gserviceaccount.com'
 
 # The private key associated with your service account in Privacy Enhanced
 # Email format (.pem suffix).  To convert a private key from the RSA format

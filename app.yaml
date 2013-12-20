@@ -29,15 +29,18 @@ libraries:
   version: "latest"
 - name: webapp2
   version: "latest"
+- name: pycrypto
+  version: "2.6"  
 
 handlers:
+
+## Earth Engine dep:
+- url: /oauth2callback
+  script: oauth2client.appengine.application
 
 - url: /_ah/mail/sub.*
   script: gfw.pubsub.handlers
   login: admin
-# - url: /_ah/mail/sub\+.*@gfw-apis\.appspotmail\.com
-#   script: gfw.pubsub.handlers
-#   login: admin  
 
 - url: /.*
   script: gfw.api.handlers
