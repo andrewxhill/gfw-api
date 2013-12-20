@@ -40,7 +40,8 @@ WHERE visible = True {and_where}"""
  
  
 GET = """SELECT details, email, featured, name, title, visible, date,
-    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coordinates, media
+    location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coordinates, media,
+    ST_AsGeoJSON(the_geom) as the_geom, when_did_it_happen, where_did_it_happen
 FROM {table}
 WHERE cartodb_id = {id}"""
  
