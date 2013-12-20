@@ -33,14 +33,22 @@ def _loss(params):
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
-    params['maxPixels'] = int(params['maxPixels'])
-    params['tileScale'] = int(params['tileScale'])
+    if params.get('maxPixels'):
+        params['maxPixels'] = int(params['maxPixels'])
+    if params.get('tileScale'):
+        params['tileScale'] = int(params['tileScale'])
+    if params.get('scale'):
+        params['scale'] = int(params['scale'])
+    else:
+        params['scale'] = 90
+    if params.get('bestEffort'):
+        params['bestEffort'] = bool(params['bestEffort'])
+    else:
+        params['bestEffort'] = True
     region = ee.Geometry.Polygon(poly)
     reduce_args = {
         'reducer': ee.Reducer.sum(),
-        'geometry': region,
-        'scale': 90,
-        'bestEffort': True,
+        'geometry': region
     }
     reduce_args.update(params)
     logging.info('REDUCER PARAMS %s' % reduce_args)
