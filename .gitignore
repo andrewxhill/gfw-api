@@ -6,3 +6,5 @@ cdb.txt
 pubtoken.txt
 dev.json
 prod.json
+privatekey.pem
+ee_asset_ids.json
