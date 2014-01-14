@@ -242,6 +242,8 @@ class AnalyzeApi(BaseApi):
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
+            if params.get('bust'):
+                params.pop('bust')
             value = analyze(dataset, params)
             entry = Entry(id=rid, value=json.dumps(value))
             entry.put()
