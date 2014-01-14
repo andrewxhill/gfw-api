@@ -27,9 +27,9 @@ def _get_coords(geojson):
     return geojson.get('coordinates')
 
 
-def _loss(params):
+def _ee(params, asset_id):
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
-    loss_by_year = ee.Image(config.assets['hansen_loss'])
+    loss_by_year = ee.Image(config.assets[asset_id])
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
@@ -61,8 +61,13 @@ def _loss(params):
         .multiply(ee.Image.pixelArea()) \
         .reduceRegion(**reduce_args)
     percent_results = percent_stats.getInfo()
-    logging.info(area_results)
-    logging.info(percent_results)
+    if asset_id == 'hansen_all':
+        loss = area_results['loss']
+        area_results.pop('loss')
+        area_results['loss_sum'] = loss
+        loss = percent_results['loss']
+        percent_results.pop('loss')
+        percent_results['loss_sum'] = loss        
     return dict(area=area_results, percent=percent_results)
 
 
@@ -72,5 +77,11 @@ def download(params):
 
 def analyze(params):
     layer = params.get('layer')
-    if layer == 'loss':
-        return _loss(params)
+    geom = params.get('geom', '')
+    geom = json.loads(geom)
+    if layer == 'sum':
+        result = _ee(params, 'hansen_all')
+    else:
+        result = _ee(params, 'hansen_loss')
+    result['geom'] = geom
+    return result

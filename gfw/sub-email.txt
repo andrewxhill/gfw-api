@@ -1,0 +1,16 @@
+
+You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
+
+{notification.value} {notification.unit} were detected within your area of interest. Explore on Global Forest Watch here. 
+
+Coordinates for your area of interest (a country or self-drawn polygon):
+
+<img src="{map-url}"/>
+
+You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org 
+
+You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset you have requested alerts for (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
+
+Terms of Service:
+
+Insert terms of service language here
