@@ -78,22 +78,17 @@ GEOJSON_GEOM_SQL = """SELECT *
      AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
         the_geom)"""
 
-ALERTS_ALL_COUNTRIES = """SELECT countries.carbon_stocks,
-  countries.emissions, countries.convention_cbd,
-  countries.convention_cites, countries.convention_ilo,
-  countries.convention_itta, countries.convention_kyoto,
-  countries.convention_nlbi, countries.convention_ramsar,
-  countries.convention_unccd, countries.convention_unfccc,
-  countries.convention_world_heritage, countries.dataset_link,
-  countries.employment, countries.enabled, countries.external_links,
-  countries.forest_extent, countries.gdp_percent, countries.gdp_percent_fixed,
-  countries.gross_value, countries.iso, countries.ministry_link,
-  countries.name, countries.national_policy_link,
-  countries.national_policy_title, countries.tenure_government,
-  countries.tenure_owned, countries.tenure_owned_individuals,
-  countries.tenure_reserved, countries.type_planted, countries.type_primary,
-  countries.lat, countries.lng, countries.indepth,
-  countries.type_regenerated, alerts.count AS alerts_count
+ALERTS_ALL_COUNTRIES = """SELECT countries.iso, countries.name,
+  countries.enabled, countries.lat, countries.lng, countries.extent,
+  countries.gva, countries.gva_percent, countries.employment, countries.indepth,
+  countries.national_policy_link, countries.national_policy_title,
+  countries.convention_cbd, countries.convention_unfccc,
+  countries.convention_kyoto, countries.convention_unccd,
+  countries.convention_itta, countries.convention_cites,
+  countries.convention_ramsar, countries.convention_world_heritage,
+  countries.convention_nlbi, countries.convention_ilo, countries.ministry_link,
+  countries.external_links, countries.dataset_link, countries.emissions,
+  countries.carbon_stocks, alerts.count AS alerts_count
   FROM gfw2_countries AS countries
   LEFT OUTER JOIN (
       SELECT COUNT(*) AS count, iso
@@ -111,22 +106,17 @@ ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
       GROUP BY iso)
   AS alerts ON alerts.iso = countries.iso"""
 
-ALERTS_COUNTRY = """SELECT countries.carbon_stocks,
-  countries.emissions, countries.convention_cbd,
-  countries.convention_cites, countries.convention_ilo,
-  countries.convention_itta, countries.convention_kyoto,
-  countries.convention_nlbi, countries.convention_ramsar,
-  countries.convention_unccd, countries.convention_unfccc,
-  countries.convention_world_heritage, countries.dataset_link,
-  countries.employment, countries.enabled, countries.external_links,
-  countries.forest_extent, countries.gdp_percent, countries.gdp_percent_fixed,
-  countries.gross_value, countries.iso, countries.ministry_link,
-  countries.name, countries.national_policy_link,
-  countries.national_policy_title, countries.tenure_government,
-  countries.tenure_owned, countries.tenure_owned_individuals,
-  countries.tenure_reserved, countries.type_planted, countries.type_primary,
-  countries.lat, countries.lng, countries.indepth,
-  countries.type_regenerated, alerts.count AS alerts_count, alerts.iso
+ALERTS_COUNTRY = """SELECT countries.iso, countries.name,
+  countries.enabled, countries.lat, countries.lng, countries.extent,
+  countries.gva, countries.gva_percent, countries.employment, countries.indepth,
+  countries.national_policy_link, countries.national_policy_title,
+  countries.convention_cbd, countries.convention_unfccc,
+  countries.convention_kyoto, countries.convention_unccd,
+  countries.convention_itta, countries.convention_cites,
+  countries.convention_ramsar, countries.convention_world_heritage,
+  countries.convention_nlbi, countries.convention_ilo, countries.ministry_link,
+  countries.external_links, countries.dataset_link, countries.emissions,
+  countries.carbon_stocks, alerts.count AS alerts_count, alerts.iso
   FROM gfw2_countries AS countries
   RIGHT OUTER JOIN (
       SELECT COUNT(*) AS count, iso
