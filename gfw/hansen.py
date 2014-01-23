@@ -22,6 +22,22 @@ import ee
 import logging
 import config
 
+from gfw import cdb
+
+ALL = """SELECT iso, year, sum(loss) loss, sum(loss_perc) loss_perc
+         FROM hansen 
+         WHERE iso ilike '{iso}' 
+         GROUP BY iso, year 
+         ORDER BY iso, year ASC"""
+
+SUM = """SELECT iso, avg(treecover_2000) treecover_2000,
+                avg(treecover_2000_perc) treecover_2000_perc,
+                avg(gain) gain, avg(gain_perc) gain_perc,
+                sum(loss) loss,
+                sum(loss_perc) loss_perc
+         FROM hansen 
+         WHERE iso ilike '{iso}'
+         GROUP BY iso"""
 
 def _get_coords(geojson):
     return geojson.get('coordinates')
@@ -70,6 +86,36 @@ def _ee(params, asset_id):
         percent_results['loss_sum'] = loss        
     return dict(area=area_results, percent=percent_results)
 
+def _percent(row):
+    return row['year'], row['loss_perc']
+
+def _area(row):
+    return row['year'], row['loss']
+
+def _cdb(iso, layer):
+    if layer == 'sum':
+        query = SUM.format(iso=iso)
+        result = cdb.execute(query, {})
+        if result:
+            result = json.loads(result)['rows'][0]
+            percent = dict(
+                loss_sum=result['loss_perc'],
+                treecover_2000=result['treecover_2000_perc'],
+                gain=result['gain_perc'])
+            area = dict(
+                loss_sum=result['loss'],
+                treecover_2000=result['treecover_2000'],
+                gain=result['gain'])
+            return dict(iso=iso, area=area, percent=percent)
+    elif layer == 'all':
+        query = ALL.format(iso=iso)
+        result = cdb.execute(query, {})
+        if result:
+            rows = json.loads(result)['rows']
+            percent = dict(map(_percent, rows))
+            area = dict(map(_area, rows))
+            return dict(iso=iso, area=area, percent=percent)
+
 
 def download(params):
     pass
@@ -77,11 +123,16 @@ def download(params):
 
 def analyze(params):
     layer = params.get('layer')
-    geom = params.get('geom', '')
-    geom = json.loads(geom)
-    if layer == 'sum':
-        result = _ee(params, 'hansen_all')
+    geom = params.get('geom', None)
+    if geom:
+        geom = json.loads(geom)
+        if layer == 'sum':
+            result = _ee(params, 'hansen_all')
+        else:
+            result = _ee(params, 'hansen_loss')
+        result['geom'] = geom
     else:
-        result = _ee(params, 'hansen_loss')
-    result['geom'] = geom
+        iso = params.get('iso', None)
+        if iso:
+            result = _cdb(iso, layer)
     return result
