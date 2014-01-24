@@ -51,12 +51,21 @@ def get_url(query, params, api_key):
     return '%s?%s' % (ENDPOINT, urllib.urlencode(params))
 
 
+def get_body(query, params, api_key):
+    """Return CartoDB payload body for supplied params."""
+    params['q'] = query
+    if api_key:
+        params['api_key'] = _get_api_key()
+    body = urllib.urlencode(params)
+    return body
+
 def execute(query, params={}, api_key=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
+    logging.info('CARTODB QUERY %s' % query)
     rpc = urlfetch.create_rpc(deadline=60)
     url = get_url(query, params, api_key)
-    logging.info(url)
-    urlfetch.make_fetch_call(rpc, url)
+    payload = get_body(query, params, api_key)
+    urlfetch.make_fetch_call(rpc, ENDPOINT, method='POST', payload=payload)
     try:
         result = rpc.get_result()
         if result.status_code == 200:
