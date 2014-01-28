@@ -42,6 +42,9 @@ handlers:
   script: gfw.pubsub.handlers
   login: admin
 
+- url: /backend/datasets/hansen.*
+  script: gfw.hansen.handlers
+
 - url: /.*
   script: gfw.api.handlers
 
