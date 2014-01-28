@@ -19,6 +19,7 @@
 
 import json
 import ee
+import os
 import logging
 import re
 import webapp2
@@ -188,7 +189,8 @@ class Backend(BaseApi):
         logging.info('BACKEND START')
 
     def api(self):
-        logging.info('BACKEND API')
+        import os
+        logging.info('BACKEND API %s' % os.environ)
         from gfw.api import Entry
         params = self._get_params()
         rid = self._get_id(params)

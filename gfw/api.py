@@ -23,6 +23,7 @@ import json
 import logging
 import random
 import re
+import os
 import webapp2
 
 from gfw import countries
@@ -43,6 +44,12 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
 
+from google.appengine.runtime import DeadlineExceededError as DLE
+from google.appengine.runtime.apiproxy_errors import DeadlineExceededError as DLE_RPC
+from google.appengine.api.urlfetch_errors import DeadlineExceededError as DLE_URLFETCH
+
+
+from httplib import HTTPException
 
 class Entry(ndb.Model):
     value = ndb.TextProperty()
@@ -237,6 +244,14 @@ class StoriesApi(BaseApi):
 class AnalyzeApi(BaseApi):
     """Handler for aggregated defor values for supplied dataset and polygon."""
 
+    def _error(self, e):
+        logging.info('DeadlineExceededError %s' % e)
+        host = os.environ.get('HTTP_HOST')
+        path = os.environ.get('PATH_INFO')
+        url = '%s/backend%s' % (host, path)
+        data = dict(type='redirect', url=url)
+        self._send_response(json.dumps(data))
+
     def analyze(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
@@ -244,7 +259,22 @@ class AnalyzeApi(BaseApi):
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             if params.get('bust'):
                 params.pop('bust')
-            value = analyze(dataset, params)
+            
+            try:
+                value = analyze(dataset, params)
+            except DLE, e:
+                self._error(e)
+                return
+            except DLE_RPC, e:
+                self._error(e)
+                return
+            except DLE_URLFETCH, e:
+                self._error(e)
+                return
+            except HTTPException, e:
+                self._error(e)
+                return
+
             entry = Entry(id=rid, value=json.dumps(value))
             entry.put()
         self._send_response(entry.value)
