@@ -24,6 +24,7 @@ import logging
 import re
 import webapp2
 import config
+import copy
 from hashlib import md5
 
 
@@ -50,9 +51,10 @@ def _get_coords(geojson):
     return geojson.get('coordinates')
 
 
-def _ee(params, asset_id):
+def _ee(request_params, asset_id):
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image(config.assets[asset_id])
+    params = copy.copy(request_params)
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')

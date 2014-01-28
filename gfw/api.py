@@ -25,6 +25,7 @@ import random
 import re
 import os
 import webapp2
+import time
 
 from gfw import countries
 from gfw import forma
@@ -259,21 +260,36 @@ class AnalyzeApi(BaseApi):
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             if params.get('bust'):
                 params.pop('bust')
-            
-            try:
-                value = analyze(dataset, params)
-            except DLE, e:
-                self._error(e)
-                return
-            except DLE_RPC, e:
-                self._error(e)
-                return
-            except DLE_URLFETCH, e:
-                self._error(e)
-                return
-            except HTTPException, e:
-                self._error(e)
-                return
+
+            retry_count = 0
+            max_retries = 5
+
+            # Fire off some retries
+            while retry_count < max_retries:
+                try:
+                    value = analyze(dataset, params)
+                    break
+                except:
+                    logging.info('RETRY %s on %s' % (retry_count, os.environ.get('PATH_INFO')))
+                    retry_count += 1
+                    time.sleep(3)
+
+            # Last chance before redirect
+            if retry_count >= max_retries:
+                try:
+                    value = analyze(dataset, params)
+                except DLE, e:
+                    self._error(e)
+                    return
+                except DLE_RPC, e:
+                    self._error(e)
+                    return
+                except DLE_URLFETCH, e:
+                    self._error(e)
+                    return
+                except HTTPException, e:
+                    self._error(e)
+                    return
 
             entry = Entry(id=rid, value=json.dumps(value))
             entry.put()
