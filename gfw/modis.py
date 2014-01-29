@@ -46,7 +46,8 @@ def download(params):
 
 def analyze(params):
     params['select_geom'] = ''
-    params['iso'] = params['iso'].upper()
+    if 'iso' in params:
+        params['iso'] = params['iso'].upper()
     geom = params.get('geom')
     if geom:
         query = ANALYSIS_GEOM.format(**params)
