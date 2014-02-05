@@ -22,7 +22,7 @@ from gfw import cdb
 
 ANALYSIS = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
-WHERE m.date = '{date}'
+WHERE m.date = '{date}'::date
       AND m.country = c.name
       AND c.iso3 = '{iso}'
 GROUP BY c.the_geom"""
@@ -30,7 +30,7 @@ GROUP BY c.the_geom"""
 ANALYSIS_GEOM = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
 WHERE ST_Intersects(m.the_geom,ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326))
-      AND m.date = '{date}'
+      AND m.date = '{date}'::date
 GROUP BY c.the_geom"""
 
 
@@ -46,7 +46,8 @@ def download(params):
 
 def analyze(params):
     params['select_geom'] = ''
-    params['iso'] = params['iso'].upper()
+    if 'iso' in params:
+        params['iso'] = params['iso'].upper()
     geom = params.get('geom')
     if geom:
         query = ANALYSIS_GEOM.format(**params)
@@ -54,5 +55,9 @@ def analyze(params):
         query = ANALYSIS.format(**params)
     result = cdb.execute(query)
     if result:
-        result = json.loads(result)['rows'][0]
+        rows = json.loads(result)['rows']
+        if rows:
+            result = rows[0]
+        else:
+            result = dict(total=0)
     return result

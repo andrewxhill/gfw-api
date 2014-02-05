@@ -19,8 +19,16 @@
 
 import json
 import ee
+import os
 import logging
+import re
+import webapp2
 import config
+import copy
+from hashlib import md5
+
+
+from appengine_config import runtime_config
 
 from gfw import cdb
 
@@ -43,9 +51,10 @@ def _get_coords(geojson):
     return geojson.get('coordinates')
 
 
-def _ee(params, asset_id):
+def _ee(request_params, asset_id):
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image(config.assets[asset_id])
+    params = copy.copy(request_params)
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
@@ -136,3 +145,73 @@ def analyze(params):
         if iso:
             result = _cdb(iso, layer)
     return result
+
+class BaseApi(webapp2.RequestHandler):
+    """Base request handler for API."""
+
+    def _send_response(self, data):
+        """Sends supplied result dictionnary as JSON response."""
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.response.headers.add_header('charset', 'utf-8')
+        self.response.headers["Content-Type"] = "application/json"
+        if not data:
+            self.response.out.write('')
+        else:
+            self.response.out.write(data)
+
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
+
+    def _get_params(self, body=False):
+        if body:
+            params = json.loads(self.request.body)
+        else:
+            args = self.request.arguments()
+            vals = map(self.request.get, args)
+            logging.info('ARGS %s VALS %s' % (args, vals))
+            params = dict(zip(args, vals))
+        return params
+
+    def options(self):
+        """Options to support CORS requests."""
+        self.response.headers['Access-Control-Allow-Origin'] = '*'
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
+        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+class Backend(BaseApi):
+    """Handler for backend requests."""
+
+    def start(self):
+        logging.info('BACKEND START')
+
+    def api(self):
+        import os
+        logging.info('BACKEND API %s' % os.environ)
+        from gfw.api import Entry
+        params = self._get_params()
+        rid = self._get_id(params)
+        entry = Entry.get_by_id(rid)
+        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
+            if params.get('bust'):
+                params.pop('bust')
+            value = analyze(params)
+            entry = Entry(id=rid, value=json.dumps(value))
+            entry.put()
+        self._send_response(entry.value)
+
+
+routes = [
+    webapp2.Route(r'/_ah/start', handler=Backend,
+                  handler_method='start'),
+    webapp2.Route(r'/backend/datasets/hansen', handler=Backend,
+                  handler_method='api')]
+
+
+handlers = webapp2.WSGIApplication(routes, debug=True)
+
