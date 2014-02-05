@@ -59,5 +59,5 @@ def analyze(params):
         if rows:
             result = rows[0]
         else:
-            result = 'No Data'
+            result = dict(total=0)
     return result
