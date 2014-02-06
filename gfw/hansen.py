@@ -51,9 +51,10 @@ def _get_coords(geojson):
     return geojson.get('coordinates')
 
 def _sum_range(data, begin, end):
+    logging.info('DATA %s begin %s end %s' % (data, begin, end))
     return sum(
         [value for key, value in data.iteritems() \
-            if int(key) >= int(begin) and int(key) < int(end)])
+            if (int(key) >= int(begin)) and (int(key) <= int(end))])
 
 def _get_range(result, begin, end):
     percent = _sum_range(result.get('percent'), begin, end)
@@ -64,7 +65,6 @@ def _get_range(result, begin, end):
 
 def _ee(urlparams, asset_id):
     params = copy.copy(urlparams)
-    ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image(config.assets[asset_id])
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
@@ -131,7 +131,7 @@ def _cdb(iso, layer):
                 treecover_2000=result['treecover_2000'],
                 gain=result['gain'])
             return dict(iso=iso, area=area, percent=percent)
-    elif layer == 'all':
+    elif layer == 'loss':
         query = ALL.format(iso=iso)
         result = cdb.execute(query, {})
         if result:
@@ -149,18 +149,36 @@ def analyze(params):
     layer = params.get('layer')
     geom = params.get('geom', None)
     if geom:
+        ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
         geom = json.loads(geom)
         if layer == 'sum':
             result = _ee(params, 'hansen_all')
         else:
             result = _ee(params, 'hansen_loss')
         result['geom'] = geom
+        if 'begin' in params and 'end' in params and layer == 'loss':
+            sum_results = _ee(params, 'hansen_all')
+            result['range'] = _get_range(result, params.get('begin'), params.get('end'))
+            
+            result['range']['percent']['treecover_2000'] = sum_results['percent']['treecover_2000']
+            result['range']['percent']['gain'] = sum_results['percent']['gain']
+            
+            result['range']['area']['treecover_2000'] = sum_results['area']['treecover_2000']
+            result['range']['area']['gain'] = sum_results['area']['gain']
     else:
         iso = params.get('iso', None)
         if iso:
             result = _cdb(iso, layer)
-    if 'begin' in params and 'end' in params:
-        result['range'] = _get_range(result, params.get('begin'), params.get('end'))
+        if 'begin' in params and 'end' in params and layer == 'loss':
+            sum_results = _cdb(iso, 'sum')
+            result['range'] = _get_range(result, params.get('begin'), params.get('end'))
+    
+            result['range']['percent']['treecover_2000'] = sum_results['percent']['treecover_2000']
+            result['range']['percent']['gain'] = sum_results['percent']['gain']
+            
+            result['range']['area']['treecover_2000'] = sum_results['area']['treecover_2000']
+            result['range']['area']['gain'] = sum_results['area']['gain']
+            
     return result
 
 class BaseApi(webapp2.RequestHandler):
