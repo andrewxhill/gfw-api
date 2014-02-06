@@ -39,7 +39,7 @@ DOWNLOAD_GEOM = """SELECT the_geom, data_type disturbance, SUM(ST_Area(ST_Inters
   GROUP BY data_type, the_geom"""
 
 ANALYSIS = """SELECT data_type, sum(ST_Area(the_geom_webmercator)) AS value,
-'Imazon' AS name, 'meters' AS units
+'Imazon' AS name, 'hectares' AS units
 FROM imazon_clean2
 WHERE date > '{begin}'::date
 AND date <= '{end}'::date
@@ -48,7 +48,7 @@ GROUP BY data_type"""
 
 ANALYSIS_GEOM = """SELECT data_type disturbance, SUM(ST_Area(ST_Intersection(the_geom::geography,
   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography))) AS value,
-  'Imazon' AS name, 'meters' AS units
+  'Imazon' AS name, 'hectares' AS units
   FROM imazon_clean2
   WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
@@ -75,4 +75,7 @@ def analyze(params):
     result = cdb.execute(query)
     if result:
         result = json.loads(result)['rows']
+        if result:
+          result[0]['value'] = (result[0]['value'] * result[0]['value']) / 10000.0
+          result[1]['value'] = (result[1]['value'] * result[1]['value']) / 10000.0
     return result
