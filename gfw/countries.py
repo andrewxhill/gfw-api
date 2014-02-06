@@ -32,7 +32,8 @@ ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
 
 HAS_ALERTS = """SELECT COUNT(*)
   FROM cdm_latest
-  WHERE iso ilike '{iso}'"""
+  WHERE date >= now() - INTERVAL '12 Months'
+  AND iso ilike '{iso}'"""
 
 
 GET_NO_ALERTS = GET = """SELECT countries.iso, countries.name, countries.enabled,
