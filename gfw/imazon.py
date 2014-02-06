@@ -22,43 +22,39 @@ from gfw import cdb
 
 # Download entire layer:
 DOWNLOAD = """SELECT *
-FROM imazon_clean
+FROM imazon_clean2
 WHERE ST_ISvalid(the_geom)
   AND date >= '{begin}'::date
   AND date <= '{end}'::date"""
 
 # Download within supplied GeoJSON:
-DOWNLOAD_GEOM = """SELECT the_geom,
-SUM(ST_Area(ST_Intersection(the_geom::geography,
-  ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography)))
-AS value, 'Imazon' as name, 'meters' as units
-FROM imazon_clean
-WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
+DOWNLOAD_GEOM = """SELECT the_geom, data_type disturbance, SUM(ST_Area(ST_Intersection(the_geom::geography,
+  ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography))) AS value,
+  'Imazon' AS name, 'meters' AS units
+  FROM imazon_clean2
+  WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
   AND date >= '{begin}'::date
   AND date <= '{end}'::date
-GROUP BY the_geom"""
+  GROUP BY data_type, the_geom"""
 
-# Analyze entire layer:
-ANALYSIS = """SELECT SUM(sum) AS value, 'Imazon' as name, 'meters' as units
-FROM
-  (SELECT SUM(ST_Area(the_geom::geography)) AS sum
-   FROM imazon_clean
-   WHERE ST_ISvalid(the_geom)
-     AND date >= '{begin}'::date
-     AND date <= '{end}'::date
-   GROUP BY date
-   ORDER BY date) AS alias"""
+ANALYSIS = """SELECT data_type, sum(ST_Area(the_geom_webmercator)) AS value,
+'Imazon' AS name, 'meters' AS units
+FROM imazon_clean2
+WHERE date > '{begin}'::date
+AND date <= '{end}'::date
+GROUP BY data_type"""
 
-# Analyze within supplied GeoJSON:
-ANALYSIS_GEOM = """SELECT SUM(ST_Area(ST_Intersection(the_geom::geography,
+
+ANALYSIS_GEOM = """SELECT data_type disturbance, SUM(ST_Area(ST_Intersection(the_geom::geography,
   ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)::geography))) AS value,
   'Imazon' AS name, 'meters' AS units
-FROM imazon_clean
-WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
+  FROM imazon_clean2
+  WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && the_geom
   AND ST_ISvalid(the_geom)
   AND date >= '{begin}'::date
-  AND date <= '{end}'::date"""
+  AND date <= '{end}'::date
+  GROUP BY data_type"""
 
 
 def download(params):
@@ -78,5 +74,5 @@ def analyze(params):
         query = ANALYSIS.format(**params)
     result = cdb.execute(query)
     if result:
-        result = json.loads(result)['rows'][0]
+        result = json.loads(result)['rows']
     return result
