@@ -50,14 +50,28 @@ SUM = """SELECT iso, avg(treecover_2000) treecover_2000,
 def _get_coords(geojson):
     return geojson.get('coordinates')
 
+def _sum_range(data, begin, end):
+    return sum(
+        [value for key, value in data.iteritems() \
+            if int(key) >= int(begin) and int(key) < int(end)])
 
-def _ee(request_params, asset_id):
+def _get_range(result, begin, end):
+    percent = _sum_range(result.get('percent'), begin, end)
+    area = _sum_range(result.get('area'), begin, end)
+    return dict(
+        percent=dict(name='UMD Percentage Loss', units='Percentage', value=percent, begin=int(begin), end=int(end)),
+        area=dict(name='UMD Hectares Loss', units='Hectares', value=area, begin=int(begin), end=int(end)))
+
+def _ee(urlparams, asset_id):
+    params = copy.copy(urlparams)
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image(config.assets[asset_id])
     params = copy.copy(request_params)
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
+    params.pop('begin')
+    params.pop('end')
     if params.get('maxPixels'):
         params['maxPixels'] = int(params['maxPixels'])
     if params.get('tileScale'):
@@ -144,6 +158,8 @@ def analyze(params):
         iso = params.get('iso', None)
         if iso:
             result = _cdb(iso, layer)
+    if 'begin' in params and 'end' in params:
+        result['range'] = _get_range(result, params.get('begin'), params.get('end'))
     return result
 
 class BaseApi(webapp2.RequestHandler):
