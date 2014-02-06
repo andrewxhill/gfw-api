@@ -66,7 +66,6 @@ def _ee(urlparams, asset_id):
     params = copy.copy(urlparams)
     ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
     loss_by_year = ee.Image(config.assets[asset_id])
-    params = copy.copy(request_params)
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
