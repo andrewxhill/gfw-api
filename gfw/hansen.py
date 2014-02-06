@@ -69,8 +69,10 @@ def _ee(urlparams, asset_id):
     poly = _get_coords(json.loads(params.get('geom')))
     params.pop('geom')
     params.pop('layer')
-    params.pop('begin')
-    params.pop('end')
+    if 'begin' in params:
+        params.pop('begin')
+    if 'end' in params:
+        params.pop('end')
     if params.get('maxPixels'):
         params['maxPixels'] = int(params['maxPixels'])
     if params.get('tileScale'):
