@@ -189,7 +189,7 @@ class StoriesApi(BaseApi):
         sender = \
             'Global Forest Watch Stories <noreply@gfw-apis.appspotmail.com>'
         to = runtime_config.get('wri_emails_stories')
-        story_url = 'http://gfw-beta.org/stories/%s' % story['id']
+        story_url = 'http://globalforestwatch.org/stories/%s' % story['id']
         api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
         token = story['token']
         body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
@@ -232,7 +232,7 @@ class StoriesApi(BaseApi):
             self.response.set_status(400)
         taskqueue.add(url='/stories/email', params=story,
                       queue_name="story-new-emails")
-        self.response.out.write(story)
+        self._send_response(json.dumps(story))
 
     def get(self, id):
         params = dict(id=id)
