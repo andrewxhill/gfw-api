@@ -76,6 +76,6 @@ def analyze(params):
     if result:
         result = json.loads(result)['rows']
         if result:
-          result[0]['value'] = (result[0]['value'] * result[0]['value']) / 10000.0
-          result[1]['value'] = (result[1]['value'] * result[1]['value']) / 10000.0
+          result[0]['value'] = result[0]['value'] / 10000.0
+          result[1]['value'] = result[1]['value'] / 10000.0
     return result
