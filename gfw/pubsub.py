@@ -20,7 +20,9 @@
 import json
 import logging
 import webapp2
+from gfw import polyline
 from gfw import forma
+from gfw import cdb
 from appengine_config import runtime_config
 from google.appengine.ext import ndb
 from google.appengine.api import mail
@@ -116,19 +118,59 @@ class Subscriber(InboundMailHandler):
 
 
 class Notifier(webapp2.RequestHandler):
+    def _body(self, alert, n, e, s):
+        body = """You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
+
+A total of {value} {name} {unit} were detected within your area of interest in the past {interval}. Explore the details of this dataset on Global Forest Watch <a href="http://globalforestwatch.com/sources#forest_change">here</a>. 
+
+Your area of interest is {aoi}:
+
+{aoi-vis}
+
+You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org 
+
+You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset you have requested alerts for (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
+
+Terms of Service:
+
+Insert terms of service language here"""
+    
+        # Hard code forma for now
+        alert['interval'] = 'month'
+        if not alert['value']:
+            alert['value'] = 0
+        if 'geom' in s:
+            alert['aoi'] = 'a user drawn polygon'
+            coords = json.loads(s['geom'])['coordinates'][0][0]
+            coords = [[float(j) for j in i] for i in coords]
+            poly = polyline.encode_coords(coords)
+            url = u"http://maps.googleapis.com/maps/api/staticmap?sensor=false&size=400x400&path=fillcolor:0xAA000033|color:0xFFFFFF00|enc:%s" % poly
+            alert['aoi-vis'] = '<img src="%s">' % url
+        else:
+            alert['aoi'] = 'a country (%s)' % s['iso']
+            sql = "SELECT ST_AsGeoJSON(the_geom) FROM world_countries where iso3 ilike '%s'" % s['iso']
+            result = cdb.execute(sql)
+            if result:
+                coords = json.loads(result)['rows'][0]['coordinates'][0]
+                poly = polyline.encode_coords(coords)
+                url = "http://maps.googleapis.com/maps/api/staticmap?sensor=false&size=400x400&path=fillcolor:0xAA000033%7Ccolor:0xFFFFFF00%7Cenc:%s" % poly
+                alert['aoi-vis'] = '<img src="%s">' % url
+        return body.format(**alert)
+
     def post(self):
         """"""
         n = ndb.Key(urlsafe=self.request.get('notification')).get()
         e = n.params['event']
         s = n.params['subscription']
         result = forma.subsription(s)
-        body = json.dumps(dict(event=e, subscription=s, notification=result),
-                          sort_keys=True, indent=4, separators=(',', ': '))
+        # body = json.dumps(dict(event=e, subscription=s, notification=result),
+        #                   sort_keys=True, indent=4, separators=(',', ': '))
+        body = self._body(result, n, e, s)
         logging.info("Notify %s to %s" % (n.topic, s['email']))
         mail.send_mail(
             sender='noreply@gfw-apis.appspotmail.com',
             to=s['email'],
-            subject='Global Forest Watch data notification',
+            subject='New Forest Change Alerts from Global Forest Watch',
             body=body)
 
 
