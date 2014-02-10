@@ -20,7 +20,9 @@
 import json
 import logging
 import webapp2
+from gfw import polyline
 from gfw import forma
+from gfw import cdb
 from appengine_config import runtime_config
 from google.appengine.ext import ndb
 from google.appengine.api import mail
@@ -116,20 +118,124 @@ class Subscriber(InboundMailHandler):
 
 
 class Notifier(webapp2.RequestHandler):
+
+    def _convex_hull(self, points):
+        """Computes the convex hull of a set of 2D points.
+     
+        Input: an iterable sequence of (x, y) pairs representing the points.
+        Output: a list of vertices of the convex hull in counter-clockwise order,
+          starting from the vertex with the lexicographically smallest coordinates.
+        Implements Andrew's monotone chain algorithm. O(n log n) complexity.
+        """
+     
+        # Sort the points lexicographically (tuples are compared lexicographically).
+        # Remove duplicates to detect the case we have just one unique point.
+        points = sorted(set(points))
+     
+        # Boring case: no points or a single point, possibly repeated multiple times.
+        if len(points) <= 1:
+            return points
+     
+        # 2D cross product of OA and OB vectors, i.e. z-component of their 3D cross product.
+        # Returns a positive value, if OAB makes a counter-clockwise turn,
+        # negative for clockwise turn, and zero if the points are collinear.
+        def cross(o, a, b):
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+     
+        # Build lower hull 
+        lower = []
+        for p in points:
+            while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+                lower.pop()
+            lower.append(p)
+     
+        # Build upper hull
+        upper = []
+        for p in reversed(points):
+            while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+                upper.pop()
+            upper.append(p)
+     
+        # Concatenation of the lower and upper hulls gives the convex hull.
+        # Last point of each list is omitted because it is repeated at the beginning of the other list. 
+        return lower[:-1] + upper[:-1]
+    def _body(self, alert, n, e, s):
+        body = """You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
+
+A total of {value} {name} {unit} were detected within your area of interest in the past {interval}. Explore the details of this dataset on Global Forest Watch <a href="http://globalforestwatch.com/sources#forest_change">here</a>. 
+
+Your area of interest is {aoi}, as shown in the map below:
+
+{aoi-vis}
+
+You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org 
+
+You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset for which you have requested alerts (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
+
+Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/about'>Terms of Service</a>.
+"""
+
+        html = """You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
+<p>
+A total of {value} {name} {unit} were detected within your area of interest in the past {interval}. Explore the details of this dataset on Global Forest Watch <a href="http://globalforestwatch.com/sources#forest_change">here</a>. 
+<p>
+Your area of interest is {aoi}, as shown in the map below:
+<p>
+{aoi-vis}
+<p>
+You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org 
+<p>
+You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset for which you have requested alerts (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
+<p>
+Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/about'>Terms of Service</a>.
+"""
+    
+        # Hard code forma for now
+        alert['interval'] = 'month'
+        if not alert['value']:
+            alert['value'] = 0
+        if 'geom' in s:
+            alert['aoi'] = 'a user drawn polygon'
+            coords = json.loads(s['geom'])['coordinates'][0][0]
+            coords = [[float(j) for j in i] for i in coords]
+            poly = polyline.encode_coords(coords)
+            url = u"http://maps.googleapis.com/maps/api/staticmap?sensor=false&size=600x400&path=fillcolor:0xAA000033|color:0xFFFFFF00|enc:%s" % poly
+            alert['aoi-vis'] = '<img src="%s">' % url
+        else:
+            alert['aoi'] = 'a country (%s)' % s['iso']
+            sql = "SELECT ST_AsGeoJSON(the_geom) FROM world_countries where iso3 ilike '%s'" % s['iso']
+            logging.info("SQL %s " % sql)
+            result = cdb.execute(sql)
+            if result:
+                result = json.loads(result)
+                coords = json.loads(result['rows'][0]['st_asgeojson'])['coordinates']
+                flat = []
+                for box in coords:
+                    for x in box[0]:
+                        flat.append(tuple(x))
+                points = self._convex_hull(flat)
+                logging.info(points)
+                poly = polyline.encode_coords(points)
+                url = "http://maps.googleapis.com/maps/api/staticmap?sensor=false&size=600x400&path=fillcolor:0xAA000033|color:0xFFFFFF00|enc:%s" % poly
+                alert['aoi-vis'] = '<img src="%s">' % url
+        return body.format(**alert), html.format(**alert)
+
     def post(self):
         """"""
         n = ndb.Key(urlsafe=self.request.get('notification')).get()
         e = n.params['event']
         s = n.params['subscription']
         result = forma.subsription(s)
-        body = json.dumps(dict(event=e, subscription=s, notification=result),
-                          sort_keys=True, indent=4, separators=(',', ': '))
+        # body = json.dumps(dict(event=e, subscription=s, notification=result),
+        #                   sort_keys=True, indent=4, separators=(',', ': '))
+        body, html = self._body(result, n, e, s)
         logging.info("Notify %s to %s" % (n.topic, s['email']))
         mail.send_mail(
             sender='noreply@gfw-apis.appspotmail.com',
             to=s['email'],
-            subject='Global Forest Watch data notification',
-            body=body)
+            subject='New Forest Change Alerts from Global Forest Watch',
+            body=body,
+            html=html)
 
 
 class Confirmer(webapp2.RequestHandler):

@@ -61,7 +61,7 @@ def get_body(query, params, api_key):
 
 def execute(query, params={}, api_key=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
-    logging.info('CARTODB QUERY %s' % query)
+    # logging.info('CARTODB QUERY %s' % query)
     rpc = urlfetch.create_rpc(deadline=60)
     url = get_url(query, params, api_key)
     payload = get_body(query, params, api_key)
