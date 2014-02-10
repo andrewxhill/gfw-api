@@ -45,6 +45,9 @@ handlers:
 - url: /backend/datasets/hansen.*
   script: gfw.hansen.handlers
 
+- url: /gee.*
+  script: gfw.gee_tiles.api
+
 - url: /.*
   script: gfw.api.handlers
 
