@@ -163,6 +163,7 @@ class BaseApi(webapp2.RequestHandler):
 
     def _get_params(self, body=False):
         if body:
+            logging.info("BODY %s" % self.request.body)
             params = json.loads(self.request.body)
         else:
             args = self.request.arguments()
