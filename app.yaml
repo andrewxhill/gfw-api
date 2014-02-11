@@ -23,6 +23,7 @@ api_version: 1
 
 inbound_services:
 - mail
+- warmup
 
 libraries:
 - name: jinja2

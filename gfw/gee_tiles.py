@@ -115,7 +115,8 @@ class MapInit():
 # Depricated method, GFW will move to KeysGFW and not deliver tiles from the proxy directly
 class TilesGFW(webapp2.RequestHandler):
     def get(self, m, z, x, y):
-        key = "%s-tile-%s-%s-%s" % (m,z,x,y)
+        year = self.request.get('year', '')
+        key = "%s-tile-%s-%s-%s-%s" % (m, z, x, y, year)
         cached_image = memcache.get(key)
 
         if cached_image is None:
