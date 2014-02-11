@@ -21,6 +21,7 @@ written by @andrewxhill."""
 import os
 import ee
 import time
+import math
 import webapp2
 import jinja2
 import httplib2
@@ -73,10 +74,32 @@ class MapInit():
 
       cache_time = 2
       if self.mapid is None:
-        ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
+        
+        retry_count = 0
+        max_retries = 5
+        n = 1
+
+        auth = False
+
+        while retry_count < max_retries:
+          try:
+            ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
+            auth = True
+            break
+          except:
+            logging.info('RETRY AUTHENTICATION')
+            retry_count += 1
+            time.sleep(math.pow(2, n - 1))
+            n += 1
+            if auth:
+              break
+
+        if not auth or (retry_count == max_retries):
+          return
 
         retry_count = 0
         max_retries = 5
+        n = 1
 
         while retry_count < max_retries:
           try:
@@ -121,7 +144,8 @@ class MapInit():
           except:
             logging.info('RETRY GET MAP ID %s' % reqid)
             retry_count += 1
-            time.sleep(1)
+            time.sleep(math.pow(2, n - 1))
+            n += 1
 
 # Depricated method, GFW will move to KeysGFW and not deliver tiles from the proxy directly
 class TilesGFW(webapp2.RequestHandler):
@@ -149,11 +173,12 @@ class TilesGFW(webapp2.RequestHandler):
           mapid = MapInit(m.lower(), self.request).mapid
           if mapid is None:
             # TODO add better error code control
-            self.error(404)
+            self.error(503)
             return
           else:
             retry_count = 0
             max_retries = 5
+            n = 1
             url="https://earthengine.googleapis.com/map/%s/%s/%s/%s?token=%s" % (mapid['mapid'], z, x, y, mapid['token'])
 
             while retry_count < max_retries:
@@ -163,10 +188,10 @@ class TilesGFW(webapp2.RequestHandler):
               except:
                 logging.info('TILE RETRY %s' % url)
                 retry_count += 1
-                time.sleep(1)
-
+                time.sleep(math.pow(2, n - 1))
+                n += 1
           if not result or retry_count == max_retries:
-            self.error(403)
+            self.error(503)
             return
 
           if result.status_code == 200:
@@ -175,6 +200,10 @@ class TilesGFW(webapp2.RequestHandler):
             self.response.headers["Content-Type"] = "image/png"
             self.response.headers.add_header("Expires", "Thu, 01 Dec 1994 16:00:00 GMT")
             self.response.out.write(result.content)
+          elif result.status_code == 404:
+            # hhh!!!
+            self.redirect('http://downloads2.esri.com/support/TechArticles/blank256.png')
+            return
           else:
             self.response.set_status(result.status_code)
         else:
