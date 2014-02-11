@@ -20,6 +20,7 @@ written by @andrewxhill."""
 
 import os
 import ee
+import time
 import webapp2
 import jinja2
 import httplib2
@@ -74,43 +75,53 @@ class MapInit():
       if self.mapid is None:
         ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
 
-        if reqid == 'landsat_composites':
-          # landsat (L7) composites
-          # accepts a year, side effect map display of annual L7 cloud free composite
-          landSat = ee.Image("L7_TOA_1YEAR/" + year).select("30","20","10")
-          self.mapid = landSat.getMapId({'min':1, 'max':100})
+        retry_count = 0
+        max_retries = 5
 
-        if reqid == 'l7_toa_1year_2012':
-          self.mapid = ee.Image("L7_TOA_1YEAR_2012").getMapId(
-            {'opacity': 1, 
-             'bands':'30,20,10', 
-             'min':10, 
-             'max':120, 
-             'gamma':1.6})
+        while retry_count < max_retries:
+          try:
+            if reqid == 'landsat_composites':
+              # landsat (L7) composites
+              # accepts a year, side effect map display of annual L7 cloud free composite
+              landSat = ee.Image("L7_TOA_1YEAR/" + year).select("30","20","10")
+              self.mapid = landSat.getMapId({'min':1, 'max':100})
 
-        if reqid == 'simple_green_coverage':
-          # The Green Forest Coverage background created by Andrew Hill
-          # example here: http://ee-api.appspot.com/#331746de9233cf1ee6a4afd043b1dd8f
-          treeHeight = ee.Image("Simard_Pinto_3DGlobalVeg_JGR")
-          elev = ee.Image('srtm90_v4')
-          mask2 = elev.gt(0).add(treeHeight.mask())
-          water = ee.Image("MOD44W/MOD44W_005_2000_02_24").select(["water_mask"]).eq(0)
-          self.mapid = treeHeight.mask(mask2).mask(water).getMapId({'opacity': 1, 'min':0, 'max':50, 'palette':"dddddd,1b9567,333333"})
-          
+            if reqid == 'l7_toa_1year_2012':
+              self.mapid = ee.Image("L7_TOA_1YEAR_2012").getMapId(
+                {'opacity': 1, 
+                 'bands':'30,20,10', 
+                 'min':10, 
+                 'max':120, 
+                 'gamma':1.6})
 
-        if reqid == 'simple_bw_coverage':
-          # The Green Forest Coverage background created by Andrew Hill
-          # example here: http://ee-api.appspot.com/#331746de9233cf1ee6a4afd043b1dd8f
-          treeHeight = ee.Image("Simard_Pinto_3DGlobalVeg_JGR")
-          elev = ee.Image('srtm90_v4')
-          mask2 = elev.gt(0).add(treeHeight.mask())
-          self.mapid = treeHeight.mask(mask2).getMapId({'opacity': 1, 'min':0, 'max':50, 'palette':"ffffff,777777,000000"})
-        
-        if reqid == 'masked_forest_carbon':
-          forestCarbon = ee.Image("GME/images/06900458292272798243-10017894834323798527")
-          self.mapid = forestCarbon.mask(forestCarbon).getMapId({'opacity': 0.5, 'min':1, 'max':200, 'palette':"FFFFD4,FED98E,FE9929,dd8653"})
+            if reqid == 'simple_green_coverage':
+              # The Green Forest Coverage background created by Andrew Hill
+              # example here: http://ee-api.appspot.com/#331746de9233cf1ee6a4afd043b1dd8f
+              treeHeight = ee.Image("Simard_Pinto_3DGlobalVeg_JGR")
+              elev = ee.Image('srtm90_v4')
+              mask2 = elev.gt(0).add(treeHeight.mask())
+              water = ee.Image("MOD44W/MOD44W_005_2000_02_24").select(["water_mask"]).eq(0)
+              self.mapid = treeHeight.mask(mask2).mask(water).getMapId({'opacity': 1, 'min':0, 'max':50, 'palette':"dddddd,1b9567,333333"})
+              
 
-        memcache.set(reqid,self.mapid,cache_time)
+            if reqid == 'simple_bw_coverage':
+              # The Green Forest Coverage background created by Andrew Hill
+              # example here: http://ee-api.appspot.com/#331746de9233cf1ee6a4afd043b1dd8f
+              treeHeight = ee.Image("Simard_Pinto_3DGlobalVeg_JGR")
+              elev = ee.Image('srtm90_v4')
+              mask2 = elev.gt(0).add(treeHeight.mask())
+              self.mapid = treeHeight.mask(mask2).getMapId({'opacity': 1, 'min':0, 'max':50, 'palette':"ffffff,777777,000000"})
+            
+            if reqid == 'masked_forest_carbon':
+              forestCarbon = ee.Image("GME/images/06900458292272798243-10017894834323798527")
+              self.mapid = forestCarbon.mask(forestCarbon).getMapId({'opacity': 0.5, 'min':1, 'max':200, 'palette':"FFFFD4,FED98E,FE9929,dd8653"})
+
+            memcache.set(reqid,self.mapid,cache_time)
+            break
+          except:
+            logging.info('RETRY GET MAP ID %s' % reqid)
+            retry_count += 1
+            time.sleep(1)
 
 # Depricated method, GFW will move to KeysGFW and not deliver tiles from the proxy directly
 class TilesGFW(webapp2.RequestHandler):
