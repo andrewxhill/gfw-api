@@ -404,6 +404,15 @@ def profile(l):
 
 import random 
 
+def carbon(l):
+	coords = get_coords(
+		random.randrange(4, 9),
+		random.randrange(0, 90),
+		random.randrange(0, 180))
+	coords = [x for x in coords]
+	coord = coords[random.randrange(0, len(coords))]
+	l.client.get("/gee/masked_forest_carbon/%s.png" % coord)
+
 def tile(l):
 	coords = get_coords(
 		random.randrange(4, 9),
@@ -415,7 +424,7 @@ def tile(l):
 	l.client.get("/gee/landsat_composites/%s.png?year=%s" % (coord, random.randrange(1999, 2013)))
 
 class UserBehavior(TaskSet):
-    tasks = {tile:1}
+    tasks = {tile:1, carbon:2}
 
     def on_start(self):
         pass
