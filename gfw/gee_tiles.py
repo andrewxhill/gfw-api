@@ -141,7 +141,23 @@ class TilesGFW(webapp2.RequestHandler):
             self.error(404)
             return
           else:
-            result = urlfetch.fetch(url="https://earthengine.googleapis.com/map/%s/%s/%s/%s?token=%s" % (mapid['mapid'], z, x, y, mapid['token']))
+            retry_count = 0
+            max_retries = 5
+            url="https://earthengine.googleapis.com/map/%s/%s/%s/%s?token=%s" % (mapid['mapid'], z, x, y, mapid['token'])
+
+            while retry_count < max_retries:
+              try:
+                result = urlfetch.fetch(url, deadline=60)
+                break
+              except:
+                logging.info('TILE RETRY %s' % url)
+                retry_count += 1
+                time.sleep(1)
+
+          if not result or retry_count == max_retries:
+            self.error(403)
+            return
+
           if result.status_code == 200:
             memcache.set(key,result.content,90000)
             TileEntry(id=key, value=result.content).put()
