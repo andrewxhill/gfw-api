@@ -91,7 +91,7 @@ def _ee(urlparams, asset_id):
         'geometry': region
     }
     reduce_args.update(params)
-    area_stats = loss_by_year.divide(1000 * 1000 * 255.0) \
+    area_stats = loss_by_year.divide(1000 * 10 * 255.0) \
         .multiply(ee.Image.pixelArea()) \
         .reduceRegion(**reduce_args)
     area_results = area_stats.getInfo()
