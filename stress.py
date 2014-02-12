@@ -406,7 +406,7 @@ import random
 
 def carbon(l):
 	coords = get_coords(
-		random.randrange(4, 9),
+		random.randrange(4, 14),
 		random.randrange(0, 90),
 		random.randrange(0, 180))
 	coords = [x for x in coords]
@@ -415,7 +415,7 @@ def carbon(l):
 
 def tile(l):
 	coords = get_coords(
-		random.randrange(4, 9),
+		random.randrange(4, 14),
 		random.randrange(0, 90),
 		random.randrange(0, 180))
 	coords = [x for x in coords]

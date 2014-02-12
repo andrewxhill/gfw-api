@@ -37,6 +37,9 @@ from google.appengine.ext import ndb
 class TileEntry(ndb.Model):
     value = ndb.BlobProperty()
 
+class MapIdEntry(ndb.Model):
+    value = ndb.TextProperty()
+
 jinja_environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
 
@@ -68,11 +71,16 @@ class MapInit():
 
       if reqid == 'landsat_composites':
         year = request.get("year")
-        self.mapid = memcache.get(reqid + year)
+        key = reqid + year
       else:
-        self.mapid = memcache.get(reqid)
+        key = reqid
 
-      cache_time = 2
+      self.mapid = memcache.get(key)
+      if not self.mapid: # cache miss
+        self.mapid = MapIdEntry.get_by_id(key)
+        if self.mapid: # datastore hit, update cache
+          memcache.put(key, self.mapid)          
+
       if self.mapid is None:
         
         retry_count = 0
@@ -139,7 +147,10 @@ class MapInit():
               forestCarbon = ee.Image("GME/images/06900458292272798243-10017894834323798527")
               self.mapid = forestCarbon.mask(forestCarbon).getMapId({'opacity': 0.5, 'min':1, 'max':200, 'palette':"FFFFD4,FED98E,FE9929,dd8653"})
 
-            memcache.set(reqid,self.mapid,cache_time)
+            # update cache and datastore
+            memcache.set(key, self.mapid)
+            MapIdEntry(id=key, value=self.mapid).put()
+
             break
           except:
             logging.info('RETRY GET MAP ID %s' % reqid)
