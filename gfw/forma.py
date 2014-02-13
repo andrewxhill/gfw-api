@@ -20,62 +20,64 @@
 import json
 from gfw import cdb
 
+FORMA_TABLE = 'forma_api'
+
 ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
 FROM
   (SELECT COUNT(*), iso, date
-   FROM cdm_latest
+   FROM %s
    WHERE iso ilike '{iso}'
          AND date <= now() - INTERVAL '1 Months'
    GROUP BY date, iso
-   ORDER BY iso, date) AS alias"""
+   ORDER BY iso, date) AS alias""" % FORMA_TABLE
 
 GEOJSON_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name,
   'alerts' as unit, '500 meters' as resolution
 FROM
   (SELECT COUNT(*) AS count
-   FROM cdm_latest
+   FROM %s
    WHERE date <= now() - INTERVAL '1 Months'
      AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom!s}'), 4326),
         the_geom)
    GROUP BY date, iso
-   ORDER BY iso, date) AS alias"""
+   ORDER BY iso, date) AS alias""" % FORMA_TABLE
 
 ISO_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
 FROM
   (SELECT COUNT(*), iso, date
-   FROM cdm_latest
-   WHERE iso ilike '{iso}'
+   FROM %s
+   WHERE iso ilike'{iso}'
          AND date >= '{begin}'
          AND date <= '{end}'
    GROUP BY date, iso
-   ORDER BY iso, date) AS alias"""
+   ORDER BY iso, date) AS alias""" % FORMA_TABLE
 
 ISO_GEOM_SQL = """SELECT *
-   FROM cdm_latest
-   WHERE iso ilike '{iso}'
+   FROM %s
+   WHERE iso ilike'{iso}'
          AND date >= '{begin}'
-         AND date <= '{end}'"""
+         AND date <= '{end}'""" % FORMA_TABLE
 
 GEOJSON_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
 FROM
   (SELECT COUNT(*) AS count
-   FROM cdm_latest
+   FROM %s
    WHERE date >= '{begin}'
      AND date <= '{end}'
      AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
         the_geom)
    GROUP BY date, iso
-   ORDER BY iso, date) AS alias"""
+   ORDER BY iso, date) AS alias""" % FORMA_TABLE
 
 GEOJSON_GEOM_SQL = """SELECT *
-   FROM cdm_latest
+   FROM %s
    WHERE date >= '{begin}'
      AND date <= '{end}'
      AND ST_INTERSECTS(ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326),
-        the_geom)"""
+        the_geom)""" % FORMA_TABLE
 
 ALERTS_ALL_COUNTRIES = """SELECT countries.iso, countries.name,
   countries.enabled, countries.lat, countries.lng, countries.extent,
@@ -91,19 +93,19 @@ ALERTS_ALL_COUNTRIES = """SELECT countries.iso, countries.name,
   FROM gfw2_countries AS countries
   LEFT OUTER JOIN (
       SELECT COUNT(*) AS count, iso
-      FROM cdm_latest
+      FROM %s
       WHERE date >= now() - INTERVAL '{interval}'
       GROUP BY iso)
-  AS alerts ON alerts.iso = countries.iso"""
+  AS alerts ON alerts.iso = countries.iso""" % FORMA_TABLE
 
 ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
   FROM gfw2_countries AS countries
   LEFT OUTER JOIN (
     SELECT COUNT(*) AS count, iso
-      FROM cdm_latest
+      FROM %s
       WHERE date >= now() - INTERVAL '12 Months'
       GROUP BY iso)
-  AS alerts ON alerts.iso = countries.iso"""
+  AS alerts ON alerts.iso = countries.iso""" % FORMA_TABLE
 
 ALERTS_COUNTRY = """SELECT countries.iso, countries.name,
   countries.enabled, countries.lat, countries.lng, countries.extent,
@@ -119,11 +121,11 @@ ALERTS_COUNTRY = """SELECT countries.iso, countries.name,
   FROM gfw2_countries AS countries
   RIGHT OUTER JOIN (
       SELECT COUNT(*) AS count, iso
-      FROM cdm_latest
+      FROM %s
       WHERE date >= now() - INTERVAL '12 MONTHS'
       AND iso ilike '{iso}'
       GROUP BY iso)
-  AS alerts ON alerts.iso = countries.iso"""
+  AS alerts ON alerts.iso = countries.iso""" % FORMA_TABLE
 
 
 def alerts(params):
