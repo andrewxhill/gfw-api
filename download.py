@@ -95,7 +95,8 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
             except Exception, e:
                 name = e.__class__.__name__
                 msg = 'Download Error: %s (%s)' % (dataset, name)
-                monitor.log(self.request.url, msg, error=e)
+                monitor.log(self.request.url, msg, error=e,
+                            headers=self.request.headers)
                 self._send_error()
 
 
