@@ -76,14 +76,17 @@ class Analysis(common.BaseApi):
                     result = _parse_analysis(dataset, response.content)
                     value = json.dumps(result)
                     AnalysisEntry(id=rid, value=value).put()
+                    monitor.log(self.request.url, 'Analyze %s' % dataset,
+                                headers=self.request.headers)
                     self._send_response(value)
                 else:
                     raise Exception('CartoDB Failed (status=%s, content=%s)' %
                                    (response.status_code, response.content))
             except Exception, e:
                 name = e.__class__.__name__
-                msg = 'Analysis Error: %s (%s)' % (dataset, name)
-                monitor.log(self.request.url, msg, error=e)
+                msg = 'Error: Analyze %s (%s)' % (dataset, name)
+                monitor.log(self.request.url, msg, error=e,
+                            headers=self.request.headers)
                 self._send_error()
 
 

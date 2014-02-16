@@ -23,6 +23,7 @@ from appengine_config import runtime_config
 
 from gfw import forma, imazon, modis
 
+from google.appengine.api import urlfetch
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
 
@@ -70,8 +71,6 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         self.response.headers.add_header(
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
-        monitor.log(self.request.url, 'Analysis download',
-                    headers=self.request.headers)
         self.redirect(str(url))
 
     def _send_error(self):
@@ -90,11 +89,18 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         else:
             try:
                 url = _download(dataset, params)
-                DownloadEntry(id=rid, value=url).put()
-                self._redirect(url)
+                response = urlfetch.fetch(url, method='HEAD', deadline=60)
+                if response.status_code == 200:
+                    DownloadEntry(id=rid, value=url).put()
+                    monitor.log(self.request.url, 'Download %s' % dataset,
+                                headers=self.request.headers)
+                    self._redirect(url)
+                else:
+                    raise Exception('CartoDB status=%s, content=%s' %
+                                    (response.status_code, response.content))
             except Exception, e:
                 name = e.__class__.__name__
-                msg = 'Download Error: %s (%s)' % (dataset, name)
+                msg = 'Error: Download %s (%s)' % (dataset, name)
                 monitor.log(self.request.url, msg, error=e,
                             headers=self.request.headers)
                 self._send_error()

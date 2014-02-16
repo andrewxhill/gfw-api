@@ -71,6 +71,7 @@ class Monitor(webapp2.RequestHandler):
                  '{city}', {the_geom});"""
         query = sql.format(**vals)
         if not dev:
+            logging.info(query)
             cdb.execute(query, auth=True)
 
 
