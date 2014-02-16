@@ -38,20 +38,25 @@ class Monitor(webapp2.RequestHandler):
     def post(self):
         url, msg, error = map(self.request.get, ['url', 'msg', 'error'])
         dev = runtime_config.get('IS_DEV')
-        vals = dict(dev=dev, error=error, url=urllib.quote_plus(url), msg=msg)
-        logging.error('MONITOR ERROR: %s' % vals)
+        vals = dict(
+            dev=dev,
+            error=error.replace("'", ''),
+            url=urllib.quote_plus(url),
+            msg=msg.replace("'", ''))
+        logging.info('MONITOR: %s' % vals)
         sql = """INSERT INTO gfw_api_monitor
                  (dev, error, url, msg)
                  VALUES
                  ({dev},'{error}','{url}','{msg}');"""
         query = sql.format(**vals)
-        logging.info(query)
         mail.send_mail(
             sender='noreply@gfw-apis.appspotmail.com',
             to='eightysteele+gfw-api-errors@gmail.com',
             subject='[GFW API ERROR] %s' % msg,
-            body=json.dumps(vals))
-        cdb.execute(query, auth=True)
+            body=json.dumps(vals, sort_keys=True, indent=4,
+                            separators=(',', ': ')))
+        if not dev:
+            cdb.execute(query, auth=True)
 
 
 routes = [webapp2.Route(r'/monitor', handler=Monitor, methods=['POST'])]

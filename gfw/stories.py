@@ -78,7 +78,7 @@ def list(params):
     result = cdb.execute(
         LIST.format(and_where=and_where, table=TABLE), auth=True)
     if result:
-        data = json.loads(result.read())
+        data = json.loads(result.content)
         if 'total_rows' in data and data['total_rows'] > 0:
             return map(_prep_story, data['rows'])
  

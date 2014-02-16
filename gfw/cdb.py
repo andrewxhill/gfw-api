@@ -17,20 +17,16 @@
 
 """This module supports executing CartoDB queries."""
 
-# import os
-# os.environ['GAE_USE_SOCKETS_HTTPLIB'] = 'yup'
-
 import urllib
-import httplib
 
 from appengine_config import runtime_config
-# from google.appengine.api import urlfetch
+from google.appengine.api import urlfetch
 
 # CartoDB endpoint:
 if runtime_config.get('cdb_endpoint'):
     ENDPOINT = runtime_config.get('cdb_endpoint')
 else:
-    ENDPOINT = 'wri-01.cartodb.com'
+    ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
 
 
 def _get_api_key():
@@ -47,15 +43,15 @@ def get_format(media_type):
         return tokens[2].split('+')[0]
 
 
-def get_url(query, params, api_key):
+def get_url(query, params, auth=False):
     """Return CartoDB query URL for supplied params."""
     params['q'] = query
-    if api_key:
+    if auth:
         params['api_key'] = _get_api_key()
     return '%s?%s' % (ENDPOINT, urllib.urlencode(params))
 
 
-def get_body(query, params, auth):
+def get_body(query, params, auth=False):
     """Return CartoDB payload body for supplied params."""
     params['q'] = query
     if auth:
@@ -66,12 +62,7 @@ def get_body(query, params, auth):
 
 def execute(query, params={}, auth=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
-    # rpc = urlfetch.create_rpc(deadline=60)
-    payload = get_body(query, params, auth)
-    # req = httplib2.Request(ENDPOINT, payload)
-    # return httplib2.urlopen(req)
-    conn = httplib.HTTPConnection(ENDPOINT, 80)
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "text/plain"}
-    conn.request("POST", "/api/v1/sql", payload, headers)
-    return conn.getresponse()
+    rpc = urlfetch.create_rpc(deadline=60)
+    payload = get_body(query, params, auth=auth)
+    urlfetch.make_fetch_call(rpc, ENDPOINT, method='POST', payload=payload)
+    return rpc.get_result()

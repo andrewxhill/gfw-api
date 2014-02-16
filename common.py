@@ -17,6 +17,7 @@
 
 import json
 import re
+import webapp2
 
 from hashlib import md5
 
@@ -39,3 +40,45 @@ def _get_request_id(request, params):
     whitespace = re.compile(r'\s+')
     params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
     return '%s/%s.%s' % (path, md5(params).hexdigest(), fmt)
+
+
+class BaseApi(webapp2.RequestHandler):
+    """Base request handler for API."""
+
+    def _get_id(self, params):
+        whitespace = re.compile(r'\s+')
+        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+        return '/'.join([self.request.path.lower(), md5(params).hexdigest()])
+
+    def _get_params(self, body=False):
+        if body:
+            params = json.loads(self.request.body)
+        else:
+            args = self.request.arguments()
+            vals = map(self.request.get, args)
+            params = dict(zip(args, vals))
+        return params
+
+    def _redirect(self, url):
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.redirect(str(url))
+
+    def _send_response(self, data):
+        """Sends supplied result dictionnary as JSON response."""
+        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
+        self.response.headers.add_header(
+            'Access-Control-Allow-Headers',
+            'Origin, X-Requested-With, Content-Type, Accept')
+        self.response.headers.add_header('charset', 'utf-8')
+        self.response.headers["Content-Type"] = "application/json"
+        self.response.out.write(str(data))
+
+    def options(self):
+        """Options to support CORS requests."""
+        self.response.headers['Access-Control-Allow-Origin'] = '*'
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
+        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'

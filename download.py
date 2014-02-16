@@ -18,20 +18,13 @@
 import webapp2
 import monitor
 import common
-import logging
-import os
 
 from appengine_config import runtime_config
 
-from gfw import forma, imazon, modis, gcs
+from gfw import forma, imazon, modis
 
-from google.appengine.api import backends
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
-
 
 # Support datasets for download.
 _DATASETS = ['imazon', 'forma', 'modis']
@@ -72,28 +65,17 @@ class DownloadEntry(ndb.Model):
 
 
 class Download(blobstore_handlers.BlobstoreDownloadHandler):
-    def _backend_redirect(self):
+    def _redirect(self, url):
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
         self.response.headers.add_header(
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
-        host = backends.get_url(backend='download')
-        path = '/backend%s' % os.environ.get('PATH_INFO')
-        query = os.environ.get('QUERY_STRING')
-        url = '%s%s?%s' % (host, path, query)
-        logging.info('REDIRECT BACKEND: %s' % url)
-        self.redirect(url)
+        self.redirect(str(url))
 
     def _send_error(self):
         self.response.set_status(400)
         msg = "Something's not right. Sorry about that! We notified the team."
         self.response.out.write(msg)
-
-    def start(self):
-        logging.info('BACKEND STARTING')
-
-    def stop(self):
-        logging.info('BACKEND STOPPING')
 
     def download(self, dataset, fmt):
         params = common._get_request_params(self.request)
@@ -102,62 +84,19 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         bust = params.get('bust')
         entry = DownloadEntry.get_by_id(rid)
         if entry and not bust:
-            self.send_blob(entry.value)
+            self._redirect(entry.value)
         else:
             try:
-                response = _download(dataset, params)
-                if response.status == 200:
-                    content = response.read()
-                    content_type = _CONTENT_TYPES[fmt]
-                    gcs_path = gcs.create_file(content, rid, content_type)
-                    blob_key = blobstore.create_gs_key(gcs_path)
-                    entry = DownloadEntry(id=rid, value=blob_key)
-                    entry.put()
-                    self.send_blob(entry.value)
-                elif response.status == 504:
-                    if not 'backend' in self.request.url:
-                        self._backend_redirect()
-                    else:
-                        msg = 'CartoDB error: %s, code:%s, content:%s' % \
-                            (dataset, response.status, response.read())
-                        monitor.error(self.request.url, msg)
-                        self._send_error()
-                else:
-                    # Unrecoverable problem with the CartoDB request:
-                    msg = 'CartoDB error: %s, status:%s, content:%s' % \
-                        (dataset, response.status, response.read())
-                    monitor.error(self.request.url, msg)
-                    self._send_error()
+                url = _download(dataset, params)
+                DownloadEntry(id=rid, value=url).put()
+                self._redirect(url)
             except Exception, e:
-                # App Engine exception:
                 name = e.__class__.__name__
-                logging.info('DOWNLOAD ERROR %s' % name)
-                if name in ['DeadlineExceededError']:
-                    if not 'backend' in self.request.url:
-                        self._backend_redirect()
-                    else:
-                        msg = 'Download error: %s' % dataset
-                        monitor.error(self.request.url, msg, error=e)
-                        self._send_error()
-                else:
-                    msg = 'Download error: %s' % dataset
-                    monitor.error(self.request.url, msg, error=e)
-                    self._send_error()
+                msg = 'Download Error: %s (%s)' % (dataset, name)
+                monitor.error(self.request.url, msg, error=e)
+                self._send_error()
 
 
-routes = [
-    webapp2.Route(_ROUTE, handler=Download, handler_method='download'),
-    webapp2.Route(r'/_ah/start', handler=Download, handler_method='start'),
-    webapp2.Route(r'/_ah/stop', handler=Download, handler_method='stop'),
-    webapp2.Route(_BACKEND_ROUTE, handler=Download, handler_method='download')]
+routes = [webapp2.Route(_ROUTE, handler=Download, handler_method='download')]
 
 handlers = webapp2.WSGIApplication(routes, debug=runtime_config.get('IS_DEV'))
-
-application = webapp.WSGIApplication(routes)
-
-
-def main():
-    run_wsgi_app(application)
-
-if __name__ == '__main__':
-    main()

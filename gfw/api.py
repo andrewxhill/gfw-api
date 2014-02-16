@@ -296,11 +296,8 @@ class AnalyzeApi(BaseApi):
             error = None
             while retry_count < max_retries:
                 try:
-                    logging.info('hi')
                     response = analyze(dataset, params)
-                    logging.info(response)
-                    data = response.read()
-                    logging.info(data)
+                    data = response.content
                     value = json.loads(data)['rows'][0]
                     error = None
                     break

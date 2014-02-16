@@ -146,14 +146,14 @@ def alerts(params):
 
 
 def download(params):
-    """Return CartoDB download response for supplied parameters."""
+    """Return CartoDB download URL for supplied parameters."""
     if 'geom' in params:
         query = GEOJSON_GEOM_SQL.format(**params)
     elif 'iso' in params:
         query = ISO_GEOM_SQL.format(**params)
     else:
         raise ValueError('FORMA download expects geom or iso parameter')
-    return cdb.execute(query, params=dict(format=params['format']))
+    return cdb.get_url(query, params=dict(format=params['format']))
 
 
 def analyze(params):
@@ -164,6 +164,10 @@ def analyze(params):
     else:
         raise ValueError('FORMA analysis expects geom or iso parameter')
     return cdb.execute(query)
+
+
+def parse_analysis(content):
+    return json.loads(content)['rows'][0]
 
 
 def subsription(params):

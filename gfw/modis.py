@@ -41,12 +41,7 @@ def download(params):
         query = ANALYSIS_GEOM.format(**params)
     else:
         query = ANALYSIS.format(**params)
-    try:
-        content = cdb.execute(query, params)
-        if not content:
-            return cdb.get_url(query, params, None), None
-    except Exception, e:
-        return cdb.get_url(query, params, None), e
+    return cdb.get_url(query, params=dict(format=params['format']))
 
 
 def analyze(params):
