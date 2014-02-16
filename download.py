@@ -85,6 +85,8 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         bust = params.get('bust')
         entry = DownloadEntry.get_by_id(rid)
         if entry and not bust:
+            monitor.log(self.request.url, 'Download %s' % dataset,
+                        headers=self.request.headers)
             self._redirect(entry.value)
         else:
             try:
