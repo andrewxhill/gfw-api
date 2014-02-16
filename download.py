@@ -70,6 +70,8 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         self.response.headers.add_header(
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
+        monitor.log(self.request.url, 'Analysis download',
+                    headers=self.request.headers)
         self.redirect(str(url))
 
     def _send_error(self):
@@ -93,7 +95,7 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
             except Exception, e:
                 name = e.__class__.__name__
                 msg = 'Download Error: %s (%s)' % (dataset, name)
-                monitor.error(self.request.url, msg, error=e)
+                monitor.log(self.request.url, msg, error=e)
                 self._send_error()
 
 

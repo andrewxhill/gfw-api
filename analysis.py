@@ -83,7 +83,7 @@ class Analysis(common.BaseApi):
             except Exception, e:
                 name = e.__class__.__name__
                 msg = 'Analysis Error: %s (%s)' % (dataset, name)
-                monitor.error(self.request.url, msg, error=e)
+                monitor.log(self.request.url, msg, error=e)
                 self._send_error()
 
 
