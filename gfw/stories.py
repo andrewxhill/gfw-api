@@ -63,7 +63,7 @@ def create(params):
     props['geom'] = json.dumps(props['geom'])
     if 'media' in props:
         props['media'] = json.dumps(props['media'])
-    return cdb.execute(INSERT.format(**props), api_key=True)
+    return cdb.execute(INSERT.format(**props), auth=True)
  
  
 def list(params):
@@ -76,16 +76,16 @@ def list(params):
     if and_where:
         and_where = and_where.format(**params)
     result = cdb.execute(
-        LIST.format(and_where=and_where, table=TABLE), api_key=True)
+        LIST.format(and_where=and_where, table=TABLE), auth=True)
     if result:
-        data = json.loads(result)
+        data = json.loads(result.read())
         if 'total_rows' in data and data['total_rows'] > 0:
             return map(_prep_story, data['rows'])
  
  
 def get(params):
     params['table'] = TABLE
-    result = cdb.execute(GET.format(**params), api_key=True)
+    result = cdb.execute(GET.format(**params), auth=True)
     if result:
         data = json.loads(result)
         if 'total_rows' in data and data['total_rows'] == 1:

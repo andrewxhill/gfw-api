@@ -10,7 +10,6 @@ def _load_asset_ids():
     path = os.path.join(os.path.abspath(
         os.path.dirname(__file__)), 'ee_asset_ids.json')
     try:
-        logging.info('PATH %s' % path)
         return json.loads(open(path, "r").read())
     except:
         return {}

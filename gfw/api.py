@@ -18,18 +18,21 @@
 """This module contains request handlers for the Global Forest Watch API."""
 
 import base64
+import copy
 import hashlib
 import json
 import logging
 import random
 import re
+import math
 import os
 import webapp2
 import time
 
 from gfw import countries
+from gfw import cdb
 from gfw import forma
-from gfw import hansen
+# from gfw import hansen
 from gfw import gcs
 from gfw import imazon
 from gfw import modis
@@ -45,12 +48,6 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
 
-from google.appengine.runtime import DeadlineExceededError as DLE
-from google.appengine.runtime.apiproxy_errors import DeadlineExceededError as DLE_RPC
-from google.appengine.api.urlfetch_errors import DeadlineExceededError as DLE_URLFETCH
-
-
-from httplib import HTTPException
 
 class Entry(ndb.Model):
     value = ndb.TextProperty()
@@ -79,7 +76,7 @@ def download(dataset, params):
 
 
 ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
-DOWNLOAD_ROUTE = r'%s.<format:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+DOWNLOAD_ROUTE = r'%s.<fmt:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
 COUNTRY_ROUTE = r'/countries'
 WDPA = r'/wdpa/sites'
 
@@ -98,52 +95,80 @@ class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
         self.response.headers.add_header(
             'Access-Control-Allow-Headers',
             'Origin, X-Requested-With, Content-Type, Accept')
-        self.response.headers.add_header('charset', 'utf-8')
-        self.response.headers["Content-Type"] = "application/json"
         self.redirect(str(url))
 
     def _get_id(self, params):
         path, format = self.request.path.lower().split('.')
-        logging.info('FORMAT %s' % format)
         format = format if format != 'shp' else 'zip'
-        logging.info('FORMAT %s' % format)
         whitespace = re.compile(r'\s+')
         params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
         return '%s/%s.%s' % (path, md5(params).hexdigest(), format)
 
-    def download(self, dataset, format):
-        args = self.request.arguments()
-        vals = map(self.request.get, args)
-        params = dict(zip(args, vals))
-        params['format'] = format
-        rid = self._get_id(params)
-        entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
-            data = download(dataset, params)
-            logging.info("DOWNLOAD %s" % data)
-            if data:
-                if data.startswith('http://'):
-                    entry = Entry(id=rid, value=data)
-                    entry.put()
-                else:
-                    content_type = CONTENT_TYPES[format]
-                    gcs_path = gcs.create_file(data, rid, content_type)
-                    value = blobstore.create_gs_key(gcs_path)
-                    entry = Entry(id=rid, value=value)
-                    entry.put()
-        if entry.value:
-            if entry.value.startswith('http://'):
-                self._redirect(entry.value)
-            else:
-                self.send_blob(entry.value)
+    def _get_params(self, body=False):
+        if body:
+            params = json.loads(self.request.body)
         else:
-            self.error(404)
+            args = self.request.arguments()
+            vals = map(self.request.get, args)
+            params = dict(zip(args, vals))
+        return params
+
+    def download(self, dataset, fmt):
+        params = self._get_params()
+        params['format'] = fmt
+        rid = self._get_id(params)
+
+        entry = Entry.get_by_id(rid)
+        error = None
+
+        if not entry or params.get('bust'):
+            try:
+                data, error = download(dataset, copy.copy(params))
+                if data:
+                    if data.startswith('http://'):  # CartoDB download URL
+                        entry = Entry(id=rid, value=data)
+                        entry.put()
+                    else:  # Downloaded data
+                        content_type = CONTENT_TYPES[fmt]
+                        gcs_path = gcs.create_file(data, rid, content_type)
+                        value = blobstore.create_gs_key(gcs_path)
+                        entry = Entry(id=rid, value=value)
+                        entry.put()
+            except Exception, e:
+                error = e
+                raise e
+
+        if error:
+            path = os.environ.get('PATH_INFO')
+            vals = dict(
+                type=error.__class__.__name__,
+                error=error.message,
+                path=path,
+                msg="Download error",
+                params=json.dumps(params))
+            taskqueue.add(url='/log/error', params=vals, queue_name="log")
+
+        if entry and entry.value:
+            if entry.value.startswith('http://'):
+                self._redirect(entry.value)  # Redirect to CartoDB
+            else:
+                self.send_blob(entry.value)  # Send cached file
+        else:
+            path = os.environ.get('PATH_INFO')
+            error = dict(
+                type='Download',
+                error='Unknown',
+                path=path,
+                msg="Failed download",
+                params=json.dumps(params))
+            taskqueue.add(url='/log/error', params=error, queue_name="log")
+            self.error(400)
 
 
 class BaseApi(webapp2.RequestHandler):
     """Base request handler for API."""
 
-    def _send_response(self, data):
+    def _send_response(self, data, error=None):
         """Sends supplied result dictionnary as JSON response."""
         self.response.headers.add_header("Access-Control-Allow-Origin", "*")
         self.response.headers.add_header(
@@ -151,10 +176,14 @@ class BaseApi(webapp2.RequestHandler):
             'Origin, X-Requested-With, Content-Type, Accept')
         self.response.headers.add_header('charset', 'utf-8')
         self.response.headers["Content-Type"] = "application/json"
+        if error:
+            self.response.set_status(400)
         if not data:
             self.response.out.write('')
         else:
             self.response.out.write(data)
+        if error:
+            taskqueue.add(url='/log/error', params=error, queue_name="log")
 
     def _get_id(self, params):
         whitespace = re.compile(r'\s+')
@@ -163,12 +192,10 @@ class BaseApi(webapp2.RequestHandler):
 
     def _get_params(self, body=False):
         if body:
-            logging.info("BODY %s" % self.request.body)
             params = json.loads(self.request.body)
         else:
             args = self.request.arguments()
             vals = map(self.request.get, args)
-            logging.info('ARGS %s VALS %s' % (args, vals))
             params = dict(zip(args, vals))
         return params
 
@@ -259,43 +286,46 @@ class AnalyzeApi(BaseApi):
         params = self._get_params()
         rid = self._get_id(params)
         entry = Entry.get_by_id(rid)
+        error = None
         if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
             if params.get('bust'):
                 params.pop('bust')
-
             retry_count = 0
-            max_retries = 5
-
-            # Fire off some retries
+            max_retries = 2
+            n = 0
+            error = None
             while retry_count < max_retries:
                 try:
-                    value = analyze(dataset, params)
+                    logging.info('hi')
+                    response = analyze(dataset, params)
+                    logging.info(response)
+                    data = response.read()
+                    logging.info(data)
+                    value = json.loads(data)['rows'][0]
+                    error = None
                     break
-                except:
-                    logging.info('RETRY %s on %s' % (retry_count, os.environ.get('PATH_INFO')))
+                except Exception, e:
                     retry_count += 1
-                    time.sleep(3)
-
-            # Last chance before redirect
-            if retry_count >= max_retries:
-                try:
-                    value = analyze(dataset, params)
-                except DLE, e:
-                    self._error(e)
-                    return
-                except DLE_RPC, e:
-                    self._error(e)
-                    return
-                except DLE_URLFETCH, e:
-                    self._error(e)
-                    return
-                except HTTPException, e:
-                    self._error(e)
-                    return
-
-            entry = Entry(id=rid, value=json.dumps(value))
-            entry.put()
-        self._send_response(entry.value)
+                    time.sleep(math.pow(2, n))
+                    n += 1
+                    error = e
+                    raise e
+            if error:
+                path = os.environ.get('PATH_INFO')
+                error = dict(
+                    type=error.__class__.__name__,
+                    error=error.message,
+                    path=path,
+                    params=json.dumps(params))
+                logging.info(error)
+                value = json.dumps(error)
+            else:    
+                entry = Entry(id=rid, value=json.dumps(value))
+                entry.put()
+                value = entry.value
+        else:
+            value = entry.value
+        self._send_response(value, error=error)
 
 
 class WdpaApi(BaseApi):
@@ -347,6 +377,31 @@ class PubSubApi(BaseApi):
         pubsub.publish(params)
         self._send_response(json.dumps(dict(publish=True)))
 
+
+class LogHandler(BaseApi):
+    def error(self):
+        pass
+        # error_type, error, path, params, msg = \
+        #     map(self.request.get, ['type', 'error', 'path', 'params', 'msg'])
+        # if runtime_config.get('IS_DEV'):
+        #     client = 'dev'
+        # else:
+        #     client = 'prod'
+        # vals = dict(client=client, error=error, path=path, params=params,
+        #             error_type=error_type, msg=msg)
+        # sql = """INSERT INTO gfw_api_log
+        #          (client, error, error_type, request_params, request_path, msg)
+        #          VALUES
+        #          ('{client}','{error}','{error_type}','{params}', '{path}',
+        #           '{msg}');"""
+        # logging.info(sql.format(**vals))
+        # cdb.execute(sql.format(**vals), api_key=True)
+        # mail.send_mail(sender='noreply@gfw-apis.appspotmail.com',
+        #                to='eightysteele+gfw-api-errors@gmail.com',
+        #                subject='[GFW API ERROR] %s - %s' % (path, error),
+        #                body=json.dumps(vals))
+
+
 routes = [
     webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
                   handler_method='analyze'),
@@ -379,6 +434,9 @@ routes = [
                   methods=['POST']),
     webapp2.Route(r'/unsubscribe', handler=PubSubApi,
                   handler_method='unsubscribe',
+                  methods=['POST']),
+    webapp2.Route(r'/log/error', handler=LogHandler,
+                  handler_method='error',
                   methods=['POST']),
     webapp2.Route(r'/publish', handler=PubSubApi,
                   handler_method='publish',

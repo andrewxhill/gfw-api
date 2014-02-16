@@ -17,16 +17,20 @@
 
 """This module supports executing CartoDB queries."""
 
-import logging
+# import os
+# os.environ['GAE_USE_SOCKETS_HTTPLIB'] = 'yup'
+
 import urllib
+import httplib
+
 from appengine_config import runtime_config
-from google.appengine.api import urlfetch
+# from google.appengine.api import urlfetch
 
 # CartoDB endpoint:
 if runtime_config.get('cdb_endpoint'):
     ENDPOINT = runtime_config.get('cdb_endpoint')
 else:
-    ENDPOINT = 'http://wri-01.cartodb.com/api/v1/sql'
+    ENDPOINT = 'wri-01.cartodb.com'
 
 
 def _get_api_key():
@@ -51,27 +55,23 @@ def get_url(query, params, api_key):
     return '%s?%s' % (ENDPOINT, urllib.urlencode(params))
 
 
-def get_body(query, params, api_key):
+def get_body(query, params, auth):
     """Return CartoDB payload body for supplied params."""
     params['q'] = query
-    if api_key:
+    if auth:
         params['api_key'] = _get_api_key()
     body = urllib.urlencode(params)
     return body
 
-def execute(query, params={}, api_key=False):
+
+def execute(query, params={}, auth=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
-    # logging.info('CARTODB QUERY %s' % query)
-    rpc = urlfetch.create_rpc(deadline=60)
-    url = get_url(query, params, api_key)
-    payload = get_body(query, params, api_key)
-    urlfetch.make_fetch_call(rpc, ENDPOINT, method='POST', payload=payload)
-    try:
-        result = rpc.get_result()
-        if result.status_code == 200:
-            return result.content
-    except urlfetch.DownloadError, e:
-        logging.error("CartoDB SQL API Error: %s %s" % (e, query))
-    except urlfetch.ResponseTooLargeError, e:
-        logging.error("CartoDB result too big: %s %s" % (e, url))
-        raise e
+    # rpc = urlfetch.create_rpc(deadline=60)
+    payload = get_body(query, params, auth)
+    # req = httplib2.Request(ENDPOINT, payload)
+    # return httplib2.urlopen(req)
+    conn = httplib.HTTPConnection(ENDPOINT, 80)
+    headers = {"Content-type": "application/x-www-form-urlencoded",
+               "Accept": "text/plain"}
+    conn.request("POST", "/api/v1/sql", payload, headers)
+    return conn.getresponse()

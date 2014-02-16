@@ -15,13 +15,27 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-total_storage_limit: 120M
-queue:
-- name: story-new-emails
-  rate: 35/s
-- name: pubsub-notify
-  rate: 35/s
-- name: pubsub-publish
-  rate: 35/s    
-- name: log
-  rate: 35/s    
+import json
+import re
+
+from hashlib import md5
+
+
+def _get_request_params(request, body=False):
+    """Return params as a dictionary for supplied HTTP request."""
+    if body:
+        params = json.loads(request.body)
+    else:
+        args = request.arguments()
+        vals = map(request.get, args)
+        params = dict(zip(args, vals))
+    return params
+
+
+def _get_request_id(request, params):
+    """Return id for supplied HTTP request and parameters."""
+    path, fmt = request.path.lower().split('.')
+    fmt = fmt if fmt != 'shp' else 'zip'
+    whitespace = re.compile(r'\s+')
+    params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
+    return '%s/%s.%s' % (path, md5(params).hexdigest(), fmt)

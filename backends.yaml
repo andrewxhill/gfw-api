@@ -1,6 +1,6 @@
 backends:
-- name: hansen
-  start: gfw.hansen.py
-  instances: 3
+- name: download
+  start: download.py
+  instances: 10
   class: B4_1G
   options: dynamic, public

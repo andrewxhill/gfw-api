@@ -25,13 +25,18 @@ inbound_services:
 - mail
 # - warmup
 
+env_variables:
+  GAE_USE_SOCKETS_HTTPLIB: 'yup'
+
 libraries:
 - name: jinja2
   version: "latest"
 - name: webapp2
   version: "latest"
+- name: ssl
+  version: "latest"
 - name: pycrypto
-  version: "2.6"  
+  version: "latest"  
 
 handlers:
 
@@ -45,6 +50,18 @@ handlers:
 
 - url: /backend/datasets/hansen.*
   script: gfw.hansen.handlers
+
+# Download handler:
+- url: /datasets/(imazon|forma|modis).(shp|geojson|kml|svg|csv)
+  script: download.handlers
+
+# Backend download handler:
+- url: /backend/datasets/(imazon|forma|modis).(shp|geojson|kml|svg|csv)
+  script: download.handlers
+
+# Monitor
+- url: /monitor.*
+  script: monitor.handlers
 
 - url: /gee.*
   script: gfw.gee_tiles.api

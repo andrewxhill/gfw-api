@@ -17,9 +17,11 @@
 
 """This module supports accessing hansen data."""
 
+# import os
+# os.environ.pop('GAE_USE_SOCKETS_HTTPLIB')
+
 import json
 import ee
-import os
 import logging
 import re
 import webapp2
@@ -148,6 +150,7 @@ def download(params):
 def analyze(params):
     layer = params.get('layer')
     geom = params.get('geom', None)
+    iso = params.get('iso', None)
     if geom:
         ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
         geom = json.loads(geom)
@@ -165,10 +168,8 @@ def analyze(params):
             
             result['range']['area']['treecover_2000'] = sum_results['area']['treecover_2000']
             result['range']['area']['gain'] = sum_results['area']['gain']
-    else:
-        iso = params.get('iso', None)
-        if iso:
-            result = _cdb(iso, layer)
+    elif iso:
+        result = _cdb(iso, layer)
         if 'begin' in params and 'end' in params and layer == 'loss':
             sum_results = _cdb(iso, 'sum')
             result['range'] = _get_range(result, params.get('begin'), params.get('end'))
@@ -178,6 +179,8 @@ def analyze(params):
             
             result['range']['area']['treecover_2000'] = sum_results['area']['treecover_2000']
             result['range']['area']['gain'] = sum_results['area']['gain']
+    else:
+        raise AssertionError('geom or iso parameter required')
             
     return result
 
