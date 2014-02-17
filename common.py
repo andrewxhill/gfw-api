@@ -75,10 +75,3 @@ class BaseApi(webapp2.RequestHandler):
         self.response.headers.add_header('charset', 'utf-8')
         self.response.headers["Content-Type"] = "application/json"
         self.response.out.write(str(data))
-
-    def options(self):
-        """Options to support CORS requests."""
-        self.response.headers['Access-Control-Allow-Origin'] = '*'
-        self.response.headers['Access-Control-Allow-Headers'] = \
-            'Origin, X-Requested-With, Content-Type, Accept'
-        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'

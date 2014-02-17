@@ -78,7 +78,17 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         msg = "Something's not right. Sorry about that! We notified the team."
         self.response.out.write(msg)
 
-    def download(self, dataset, fmt):
+    def options(self, dataset, fmt):
+        """Options to support CORS requests."""
+        self.response.headers['Access-Control-Allow-Origin'] = '*'
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
+        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+    def get(self, dataset, fmt):
+        self.post(dataset, fmt)
+
+    def post(self, dataset, fmt):
         params = common._get_request_params(self.request)
         params['format'] = fmt
         rid = common._get_request_id(self.request, params)
@@ -108,6 +118,6 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
                 self._send_error()
 
 
-routes = [webapp2.Route(_ROUTE, handler=Download, handler_method='download')]
+routes = [webapp2.Route(_ROUTE, handler=Download)]
 
 handlers = webapp2.WSGIApplication(routes, debug=runtime_config.get('IS_DEV'))

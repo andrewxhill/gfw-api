@@ -48,6 +48,13 @@ def _analyze(dataset, params):
 def _parse_analysis(dataset, content):
     if dataset == 'forma':
         return forma.parse_analysis(content)
+    elif dataset == 'imazon':
+        return imazon.parse_analysis(content)
+    elif dataset == 'modis':
+        return modis.parse_analysis(content)
+    elif dataset == 'hansen':
+        return hansen.parse_analysis(content)
+    raise ValueError('Unsupported dataset for parse analysis %s' % dataset)
 
 
 class AnalysisEntry(ndb.Model):
@@ -62,17 +69,35 @@ class Analysis(common.BaseApi):
         msg = "Something's not right. Sorry about that! We notified the team."
         self.response.out.write(msg)
 
-    def analyze(self, dataset):
+    def options(self, dataset):
+        """Options to support CORS requests."""
+        self.response.headers['Access-Control-Allow-Origin'] = '*'
+        self.response.headers['Access-Control-Allow-Headers'] = \
+            'Origin, X-Requested-With, Content-Type, Accept'
+        self.response.headers['Access-Control-Allow-Methods'] = 'POST, GET'
+
+    def get(self, dataset):
+        self.post(dataset)
+
+    def post(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
         bust = params.get('bust')
         entry = AnalysisEntry.get_by_id(rid)
         if entry and not bust:
+            monitor.log(self.request.url, 'Analyze %s' % dataset,
+                        headers=self.request.headers)
             self._send_response(entry.value)
         else:
             try:
                 response = _analyze(dataset, params)
-                if response.status_code == 200:
+                if dataset == 'hansen':
+                    value = json.dumps(response)
+                    AnalysisEntry(id=rid, value=value).put()
+                    monitor.log(self.request.url, 'Analyze %s' % dataset,
+                                headers=self.request.headers)
+                    self._send_response(value)
+                elif response.status_code == 200:
                     result = _parse_analysis(dataset, response.content)
                     value = json.dumps(result)
                     AnalysisEntry(id=rid, value=value).put()
@@ -90,6 +115,6 @@ class Analysis(common.BaseApi):
                 self._send_error()
 
 
-routes = [webapp2.Route(_ROUTE, handler=Analysis, handler_method='analyze')]
+routes = [webapp2.Route(_ROUTE, handler=Analysis)]
 
 handlers = webapp2.WSGIApplication(routes, debug=runtime_config.get('IS_DEV'))
