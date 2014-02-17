@@ -18,151 +18,40 @@
 """This module contains request handlers for the Global Forest Watch API."""
 
 import base64
-import copy
 import hashlib
 import json
-import logging
 import random
 import re
-import math
-import os
 import webapp2
-import time
+import monitor
 
+from gfw import common
 from gfw import countries
-from gfw import cdb
-from gfw import forma
-# from gfw import hansen
-from gfw import gcs
-from gfw import imazon
-from gfw import modis
 from gfw import stories
 from gfw import pubsub
 from gfw import wdpa
 from appengine_config import runtime_config
-from gfw.common import CONTENT_TYPES, IS_DEV, APP_BASE_URL
 from hashlib import md5
 from google.appengine.api import mail
 from google.appengine.api import taskqueue
-from google.appengine.ext import blobstore
 from google.appengine.ext import ndb
-from google.appengine.ext.webapp import blobstore_handlers
 
 
 class Entry(ndb.Model):
     value = ndb.TextProperty()
 
 
-def analyze(dataset, params):
-    if dataset == 'imazon':
-        return imazon.analyze(params)
-    elif dataset == 'forma':
-        return forma.analyze(params)
-    elif dataset == 'modis':
-        return modis.analyze(params)
-    elif dataset == 'hansen':
-        return hansen.analyze(params)
-    return None
-
-
-def download(dataset, params):
-    if dataset == 'imazon':
-        return imazon.download(params)
-    elif dataset == 'forma':
-        return forma.download(params)
-    elif dataset == 'modis':
-        return modis.download(params)
-    return None
-
-
-ANALYSIS_ROUTE = r'/datasets/<dataset:(imazon|forma|modis|hansen)>'
-DOWNLOAD_ROUTE = r'%s.<fmt:(shp|geojson|kml|svg|csv)>' % ANALYSIS_ROUTE
+# Countries API route
 COUNTRY_ROUTE = r'/countries'
+
+# WPDA site API route
 WDPA = r'/wdpa/sites'
 
-# Stories API
+# Stories API routes
 LIST_STORIES = r'/stories'
 CREATE_STORY = r'/stories/new'
 CREATE_STORY_EMAILS = r'/stories/email'
 GET_STORY = r'/stories/<id:\d+>'
-
-
-class DownloadApi(blobstore_handlers.BlobstoreDownloadHandler):
-
-    def _redirect(self, url):
-        """Sends supplied result dictionnary as JSON response."""
-        self.response.headers.add_header("Access-Control-Allow-Origin", "*")
-        self.response.headers.add_header(
-            'Access-Control-Allow-Headers',
-            'Origin, X-Requested-With, Content-Type, Accept')
-        self.redirect(str(url))
-
-    def _get_id(self, params):
-        path, format = self.request.path.lower().split('.')
-        format = format if format != 'shp' else 'zip'
-        whitespace = re.compile(r'\s+')
-        params = re.sub(whitespace, '', json.dumps(params, sort_keys=True))
-        return '%s/%s.%s' % (path, md5(params).hexdigest(), format)
-
-    def _get_params(self, body=False):
-        if body:
-            params = json.loads(self.request.body)
-        else:
-            args = self.request.arguments()
-            vals = map(self.request.get, args)
-            params = dict(zip(args, vals))
-        return params
-
-    def download(self, dataset, fmt):
-        params = self._get_params()
-        params['format'] = fmt
-        rid = self._get_id(params)
-
-        entry = Entry.get_by_id(rid)
-        error = None
-
-        if not entry or params.get('bust'):
-            try:
-                data, error = download(dataset, copy.copy(params))
-                if data:
-                    if data.startswith('http://'):  # CartoDB download URL
-                        entry = Entry(id=rid, value=data)
-                        entry.put()
-                    else:  # Downloaded data
-                        content_type = CONTENT_TYPES[fmt]
-                        gcs_path = gcs.create_file(data, rid, content_type)
-                        value = blobstore.create_gs_key(gcs_path)
-                        entry = Entry(id=rid, value=value)
-                        entry.put()
-            except Exception, e:
-                error = e
-                raise e
-
-        if error:
-            path = os.environ.get('PATH_INFO')
-            vals = dict(
-                type=error.__class__.__name__,
-                error=error.message,
-                path=path,
-                msg="Download error",
-                params=json.dumps(params))
-            taskqueue.add(url='/log/error', params=vals, queue_name="log")
-
-        if entry and entry.value:
-            if entry.value.startswith('http://'):
-                self._redirect(entry.value)  # Redirect to CartoDB
-            else:
-                self.send_blob(entry.value)  # Send cached file
-        else:
-            path = os.environ.get('PATH_INFO')
-            error = dict(
-                type='Download',
-                error='Unknown',
-                path=path,
-                msg="Failed download",
-                params=json.dumps(params))
-            taskqueue.add(url='/log/error', params=error, queue_name="log")
-            self.error(400)
 
 
 class BaseApi(webapp2.RequestHandler):
@@ -219,7 +108,7 @@ class StoriesApi(BaseApi):
             'Global Forest Watch Stories <noreply@gfw-apis.appspotmail.com>'
         to = runtime_config.get('wri_emails_stories')
         story_url = 'http://gfw-beta.org/stories/%s' % story['id']
-        api_url = '%s/stories/%s' % (APP_BASE_URL, story['id'])
+        api_url = '%s/stories/%s' % (common.APP_BASE_URL, story['id'])
         token = story['token']
         body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
             (story_url, api_url, token)
@@ -238,11 +127,17 @@ class StoriesApi(BaseApi):
                 ['rA', 'aZ', 'gQ', 'hH', 'hG', 'aR', 'DD'])).rstrip('==')
 
     def list(self):
-        params = self._get_params()
-        result = stories.list(params)
-        if not result:
-            result = []
-        self._send_response(json.dumps(result))
+        try:
+            params = self._get_params()
+            result = stories.list(params)
+            if not result:
+                result = []
+            self._send_response(json.dumps(result))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Story API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
     def create(self):
         params = self._get_params(body=True)
@@ -264,146 +159,99 @@ class StoriesApi(BaseApi):
         self.response.out.write(story)
 
     def get(self, id):
-        params = dict(id=id)
-        result = stories.get(params)
-        if not result:
-            self.response.set_status(404)
-        self._send_response(json.dumps(result))
-
-
-class AnalyzeApi(BaseApi):
-    """Handler for aggregated defor values for supplied dataset and polygon."""
-
-    def _error(self, e):
-        logging.info('DeadlineExceededError %s' % e)
-        host = os.environ.get('HTTP_HOST')
-        path = os.environ.get('PATH_INFO')
-        url = '%s/backend%s' % (host, path)
-        data = dict(type='redirect', url=url)
-        self._send_response(json.dumps(data))
-
-    def analyze(self, dataset):
-        params = self._get_params()
-        rid = self._get_id(params)
-        entry = Entry.get_by_id(rid)
-        error = None
-        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
-            if params.get('bust'):
-                params.pop('bust')
-            retry_count = 0
-            max_retries = 2
-            n = 0
-            error = None
-            while retry_count < max_retries:
-                try:
-                    response = analyze(dataset, params)
-                    data = response.content
-                    value = json.loads(data)['rows'][0]
-                    error = None
-                    break
-                except Exception, e:
-                    retry_count += 1
-                    time.sleep(math.pow(2, n))
-                    n += 1
-                    error = e
-                    raise e
-            if error:
-                path = os.environ.get('PATH_INFO')
-                error = dict(
-                    type=error.__class__.__name__,
-                    error=error.message,
-                    path=path,
-                    params=json.dumps(params))
-                logging.info(error)
-                value = json.dumps(error)
-            else:    
-                entry = Entry(id=rid, value=json.dumps(value))
-                entry.put()
-                value = entry.value
-        else:
-            value = entry.value
-        self._send_response(value, error=error)
+        try:
+            params = dict(id=id)
+            result = stories.get(params)
+            if not result:
+                self.response.set_status(404)
+            self._send_response(json.dumps(result))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Story API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
 
 class WdpaApi(BaseApi):
     def site(self):
-        params = self._get_params()
-        rid = self._get_id(params)
-        entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
-            site = wdpa.get_site(params)
-            if site:
-                entry = Entry(id=rid, value=json.dumps(site))
-                entry.put()
-        self._send_response(entry.value if entry else None)
+        try:
+            params = self._get_params()
+            rid = self._get_id(params)
+            entry = Entry.get_by_id(rid)
+            if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
+                site = wdpa.get_site(params)
+                if site:
+                    entry = Entry(id=rid, value=json.dumps(site))
+                    entry.put()
+            self._send_response(entry.value if entry else None)
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: WPDA API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
 
 class CountryApi(BaseApi):
     """Handler for countries."""
 
     def get(self):
-        params = self._get_params()
-        rid = self._get_id(params)
-        if 'interval' not in params:
-            params['interval'] = '12 MONTHS'
-        entry = Entry.get_by_id(rid)
-        if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
-            result = countries.get(params)
-            if result:
-                entry = Entry(id=rid, value=json.dumps(result))
-                entry.put()
-        self._send_response(entry.value if entry else None)
-
+        try:
+            params = self._get_params()
+            rid = self._get_id(params)
+            if 'interval' not in params:
+                params['interval'] = '12 MONTHS'
+            entry = Entry.get_by_id(rid)
+            if not entry or params.get('bust') or runtime_config.get('IS_DEV'):
+                result = countries.get(params)
+                if result:
+                    entry = Entry(id=rid, value=json.dumps(result))
+                    entry.put()
+            self._send_response(entry.value if entry else None)
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Countries API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
 
 class PubSubApi(BaseApi):
 
     def subscribe(self):
-        params = self._get_params(body=True)
-        pubsub.subscribe(params)
-        self.response.set_status(201)
-        self._send_response(json.dumps(dict(subscribe=True)))
+        try:
+            params = self._get_params(body=True)
+            pubsub.subscribe(params)
+            self.response.set_status(201)
+            self._send_response(json.dumps(dict(subscribe=True)))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: PubSub API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
     def unsubscribe(self):
-        params = self._get_params(body=True)
-        pubsub.unsubscribe(params)
-        self._send_response(json.dumps(dict(unsubscribe=True)))
+        try:
+            params = self._get_params(body=True)
+            pubsub.unsubscribe(params)
+            self._send_response(json.dumps(dict(unsubscribe=True)))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: PubSub API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
     def publish(self):
-        params = self._get_params(body=True)
-        pubsub.publish(params)
-        self._send_response(json.dumps(dict(publish=True)))
-
-
-class LogHandler(BaseApi):
-    def error(self):
-        pass
-        # error_type, error, path, params, msg = \
-        #     map(self.request.get, ['type', 'error', 'path', 'params', 'msg'])
-        # if runtime_config.get('IS_DEV'):
-        #     client = 'dev'
-        # else:
-        #     client = 'prod'
-        # vals = dict(client=client, error=error, path=path, params=params,
-        #             error_type=error_type, msg=msg)
-        # sql = """INSERT INTO gfw_api_log
-        #          (client, error, error_type, request_params, request_path, msg)
-        #          VALUES
-        #          ('{client}','{error}','{error_type}','{params}', '{path}',
-        #           '{msg}');"""
-        # logging.info(sql.format(**vals))
-        # cdb.execute(sql.format(**vals), api_key=True)
-        # mail.send_mail(sender='noreply@gfw-apis.appspotmail.com',
-        #                to='eightysteele+gfw-api-errors@gmail.com',
-        #                subject='[GFW API ERROR] %s - %s' % (path, error),
-        #                body=json.dumps(vals))
+        try:
+            params = self._get_params(body=True)
+            pubsub.publish(params)
+            self._send_response(json.dumps(dict(publish=True)))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: PubSub API (%s)' % name
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
 
 routes = [
-    webapp2.Route(ANALYSIS_ROUTE, handler=AnalyzeApi,
-                  handler_method='analyze'),
-    webapp2.Route(DOWNLOAD_ROUTE, handler=DownloadApi,
-                  handler_method='download'),
     webapp2.Route(COUNTRY_ROUTE, handler=CountryApi,
                   handler_method='get'),
     webapp2.Route(CREATE_STORY, handler=StoriesApi,
@@ -432,12 +280,9 @@ routes = [
     webapp2.Route(r'/unsubscribe', handler=PubSubApi,
                   handler_method='unsubscribe',
                   methods=['POST']),
-    webapp2.Route(r'/log/error', handler=LogHandler,
-                  handler_method='error',
-                  methods=['POST']),
     webapp2.Route(r'/publish', handler=PubSubApi,
                   handler_method='publish',
                   methods=['POST'])
 ]
 
-handlers = webapp2.WSGIApplication(routes, debug=IS_DEV)
+handlers = webapp2.WSGIApplication(routes, debug=common.IS_DEV)

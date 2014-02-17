@@ -171,16 +171,11 @@ def parse_analysis(content):
 
 
 def subsription(params):
-    geom = params.get('geom')
-    iso = params.get('iso')
-    if geom:
-        params['geom'] = json.dumps(geom)
+    if 'geom' in params:
+        params['geom'] = json.dumps(params.get('geom'))
         query = GEOJSON_SUB_SQL.format(**params)
-    elif iso:
+    elif 'iso' in params:
         query = ISO_SUB_SQL.format(**params)
     else:
-        raise AssertionError('geom or iso parameter required')
-    result = cdb.execute(query)
-    if result:
-        result = json.loads(result)['rows'][0]
-    return result
+        raise ValueError('FORMA subscription expects geom or iso param')
+    return cdb.execute(query)
