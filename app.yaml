@@ -50,7 +50,7 @@ handlers:
   script: download.handlers
 
 # Analysis handler:
-- url: /datasets/(imazon|forma|modis|hansen)
+- url: /datasets/(imazon|forma|modis|umd)
   script: analysis.handlers
 
 # Monitor

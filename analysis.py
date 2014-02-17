@@ -22,12 +22,12 @@ import json
 
 from appengine_config import runtime_config
 
-from gfw import forma, imazon, modis, hansen
+from gfw import forma, imazon, modis, umd
 
 from google.appengine.ext import ndb
 
 # Support datasets for analysis.
-_DATASETS = ['imazon', 'forma', 'modis', 'hansen']
+_DATASETS = ['imazon', 'forma', 'modis', 'umd']
 
 # Analysis route.
 _ROUTE = r'/datasets/<dataset:(%s)>' % '|'.join(_DATASETS)
@@ -40,8 +40,8 @@ def _analyze(dataset, params):
         return forma.analyze(params)
     elif dataset == 'modis':
         return modis.analyze(params)
-    elif dataset == 'hansen':
-        return hansen.analyze(params)
+    elif dataset == 'umd':
+        return umd.analyze(params)
     raise ValueError('Unsupported dataset for analysis: %s' % dataset)
 
 
@@ -52,8 +52,8 @@ def _parse_analysis(dataset, content):
         return imazon.parse_analysis(content)
     elif dataset == 'modis':
         return modis.parse_analysis(content)
-    elif dataset == 'hansen':
-        return hansen.parse_analysis(content)
+    elif dataset == 'umd':
+        return umd.parse_analysis(content)
     raise ValueError('Unsupported dataset for parse analysis %s' % dataset)
 
 
@@ -82,7 +82,11 @@ class Analysis(common.BaseApi):
     def post(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
-        bust = params.get('bust')
+        if 'bust' in params:
+            bust = True
+            params.pop('bust')
+        else:
+            bust = False
         entry = AnalysisEntry.get_by_id(rid)
         if entry and not bust:
             monitor.log(self.request.url, 'Analyze %s' % dataset,
@@ -91,7 +95,7 @@ class Analysis(common.BaseApi):
         else:
             try:
                 response = _analyze(dataset, params)
-                if dataset == 'hansen':
+                if dataset == 'umd':
                     value = json.dumps(response)
                     AnalysisEntry(id=rid, value=value).put()
                     monitor.log(self.request.url, 'Analyze %s' % dataset,
