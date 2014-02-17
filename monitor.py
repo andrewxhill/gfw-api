@@ -20,7 +20,6 @@ import webapp2
 import logging
 import urllib
 
-from gfw import cdb
 from appengine_config import runtime_config
 
 from google.appengine.api import mail
@@ -54,25 +53,17 @@ class Monitor(webapp2.RequestHandler):
             region=headers.get('X-Appengine-Region'),
             city=headers.get('X-Appengine-City'),
             the_geom=the_geom)
+        vals = json.dumps(vals, sort_keys=True, indent=4,
+                          separators=(',', ': '))
         if error:
             logging.error('MONITOR: %s' % vals)
             mail.send_mail(
                 sender='noreply@gfw-apis.appspotmail.com',
                 to='eightysteele+gfw-api-errors@gmail.com',
                 subject='[GFW API ERROR] %s' % msg,
-                body=json.dumps(vals, sort_keys=True, indent=4,
-                                separators=(',', ': ')))
+                body=vals)
         else:
             logging.info('MONITOR: %s' % vals)
-        sql = """INSERT INTO gfw_api_monitor
-                 (dev, error, url, msg, country, region, city, the_geom)
-                 VALUES
-                 ({dev},'{error}','{url}','{msg}','{country}','{region}',
-                 '{city}', {the_geom});"""
-        query = sql.format(**vals)
-        if not dev:
-            logging.info(query)
-            cdb.execute(query, auth=True)
 
 
 routes = [webapp2.Route(r'/monitor', handler=Monitor, methods=['POST'])]
