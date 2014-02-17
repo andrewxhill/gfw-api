@@ -19,7 +19,6 @@
 
 import json
 from gfw import cdb
-from google.appengine.api import urlfetch
 
 ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
   '500 meters' as resolution
@@ -47,7 +46,7 @@ ISO_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
 FROM
   (SELECT COUNT(*), iso, date
    FROM cdm_latest
-   WHERE iso ilike'{iso}'
+   WHERE iso ilike '{iso}'
          AND date >= '{begin}'
          AND date <= '{end}'
    GROUP BY date, iso
@@ -55,7 +54,7 @@ FROM
 
 ISO_GEOM_SQL = """SELECT *
    FROM cdm_latest
-   WHERE iso ilike'{iso}'
+   WHERE iso ilike '{iso}'
          AND date >= '{begin}'
          AND date <= '{end}'"""
 
@@ -136,46 +135,47 @@ def alerts(params):
         result = cdb.execute(query, params)
         if result:
             result = json.loads(result)['rows']
-    else:
+    elif 'geom' in params:
         query = ALERTS_ALL_COUNTRIES.format(**params)
         result = cdb.execute(query, params)
         if result:
             result = json.loads(result)['rows']
+    else:
+        raise AssertionError('geom or iso parameter required')
     return dict(total_count=alerts_count, countries=result)
 
 
 def download(params):
-    geom = params.get('geom')
-    if geom:
+    """Return CartoDB download URL for supplied parameters."""
+    if 'geom' in params:
         query = GEOJSON_GEOM_SQL.format(**params)
-    else:
+    elif 'iso' in params:
         query = ISO_GEOM_SQL.format(**params)
-    try:
-        return cdb.execute(query, params)
-    except urlfetch.ResponseTooLargeError:
-        return cdb.get_url(query, params, None)
+    else:
+        raise ValueError('FORMA download expects geom or iso parameter')
+    return cdb.get_url(query, params=dict(format=params['format']))
 
 
 def analyze(params):
-    geom = params.get('geom')
-    if geom:
+    if 'geom' in params:
         query = GEOJSON_SQL.format(**params)
-    else:
+    elif 'iso' in params:
         query = ISO_SQL.format(**params)
-    result = cdb.execute(query)
-    if result:
-        result = json.loads(result)['rows'][0]
-    return result
+    else:
+        raise ValueError('FORMA analysis expects geom or iso parameter')
+    return cdb.execute(query)
+
+
+def parse_analysis(content):
+    return json.loads(content)['rows'][0]
 
 
 def subsription(params):
-    geom = params.get('geom')
-    if geom:
-        params['geom'] = json.dumps(geom)
+    if 'geom' in params:
+        params['geom'] = json.dumps(params.get('geom'))
         query = GEOJSON_SUB_SQL.format(**params)
-    else:
+    elif 'iso' in params:
         query = ISO_SUB_SQL.format(**params)
-    result = cdb.execute(query)
-    if result:
-        result = json.loads(result)['rows'][0]
-    return result
+    else:
+        raise ValueError('FORMA subscription expects geom or iso param')
+    return cdb.execute(query)

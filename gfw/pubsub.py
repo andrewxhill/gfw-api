@@ -18,8 +18,8 @@
 """This module supports pubsub."""
 
 import json
-import logging
 import webapp2
+import monitor
 from gfw import polyline
 from gfw import forma
 from gfw import cdb
@@ -107,7 +107,6 @@ def unsubscribe(params):
 
 class Subscriber(InboundMailHandler):
     def receive(self, message):
-        logging.info("Received a sub message : %s" % message)
         if message.to.find('<') > -1:
             urlsafe = message.to.split('<')[1].split('+')[1].split('@')[0]
         else:
@@ -119,7 +118,6 @@ class Subscriber(InboundMailHandler):
 
 class Notifier(webapp2.RequestHandler):
 
-  
     def _body(self, alert, n, e, s):
         body = """You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
 
@@ -133,7 +131,7 @@ You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org
 
 You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset for which you have requested alerts (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
 
-Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/about'>Terms of Service</a>.
+Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/terms'>Terms of Service</a>.
 """
 
         html = """You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
@@ -148,10 +146,9 @@ You can unsubscribe or manage your subscriptions by emailing: gfw@wri.org
 <p>
 You will receive a separate e-mail for each distinct polygon, country, or shape on the GFW map. You will also receive a separate e-mail for each dataset for which you have requested alerts (FORMA alerts, Imazon SAD Alerts, and NASA QUICC alerts.)
 <p>
-Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/about'>Terms of Service</a>.
+Please note that this information is subject to the Global Forest Watch <a href='http://globalforestwatch.com/terms'>Terms of Service</a>.
 """
-    
-        # Hard code forma for now
+
         alert['interval'] = 'month'
         if not alert['value']:
             alert['value'] = 0
@@ -165,32 +162,44 @@ Please note that this information is subject to the Global Forest Watch <a href=
         else:
             alert['aoi'] = 'a country (%s)' % s['iso']
             sql = "SELECT ST_AsGeoJSON(ST_ConvexHull(the_geom)) FROM world_countries where iso3 ilike '%s'" % s['iso']
-            logging.info("SQL %s " % sql)
-            result = cdb.execute(sql)
-            if result:
-                result = json.loads(result)
+            response = cdb.execute(sql)
+            if response.status_code == 200:
+                result = json.loads(response.content)
                 coords = json.loads(result['rows'][0]['st_asgeojson'])['coordinates']
                 poly = polyline.encode_coords(coords[0])
                 url = "http://maps.googleapis.com/maps/api/staticmap?sensor=false&size=600x400&path=fillcolor:0xAA000033|color:0xFFFFFF00|enc:%s" % poly
                 alert['aoi-vis'] = '<img src="%s">' % url
+            else:
+                raise Exception('CartoDB Failed (status=%s, content=%s, \
+                                q=%s)' % (response.status_code,
+                                          response.content,
+                                          sql))
         return body.format(**alert), html.format(**alert)
 
     def post(self):
         """"""
-        n = ndb.Key(urlsafe=self.request.get('notification')).get()
-        e = n.params['event']
-        s = n.params['subscription']
-        result = forma.subsription(s)
-        # body = json.dumps(dict(event=e, subscription=s, notification=result),
-        #                   sort_keys=True, indent=4, separators=(',', ': '))
-        body, html = self._body(result, n, e, s)
-        logging.info("Notify %s to %s" % (n.topic, s['email']))
-        mail.send_mail(
-            sender='noreply@gfw-apis.appspotmail.com',
-            to=s['email'],
-            subject='New Forest Change Alerts from Global Forest Watch',
-            body=body,
-            html=html)
+        try:
+            n = ndb.Key(urlsafe=self.request.get('notification')).get()
+            e = n.params['event']
+            s = n.params['subscription']
+            response = forma.subsription(s)
+            if response.status_code == 200:
+                result = json.loads(response.content)['rows'][0]
+                body, html = self._body(result, n, e, s)
+                mail.send_mail(
+                    sender='noreply@gfw-apis.appspotmail.com',
+                    to=s['email'],
+                    subject='New Forest Change Alerts from Global Forest Watch',
+                    body=body,
+                    html=html)
+            else:
+                raise Exception('CartoDB Failed (status=%s, content=%s)' %
+                               (response.status_code, response.content))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Publish %s (%s)' % (json.dumps(s), name)
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
 
 
 class Confirmer(webapp2.RequestHandler):
@@ -227,7 +236,6 @@ class Publisher(webapp2.RequestHandler):
                 if not n:
                     n = Notification.create(e, s)
                     n.put()
-                logging.info("Publish %s to %s" % (s.topic, s.params['email']))
                 taskqueue.add(
                     url='/pubsub/notify',
                     queue_name='pubsub-notify',

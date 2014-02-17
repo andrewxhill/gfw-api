@@ -58,8 +58,7 @@ ANALYSIS_GEOM = """SELECT data_type disturbance, SUM(ST_Area(ST_Intersection(the
 
 
 def download(params):
-    geom = params.get('geom')
-    if geom:
+    if 'geom' in params:
         query = DOWNLOAD_GEOM.format(**params)
     else:
         query = DOWNLOAD.format(**params)
@@ -67,15 +66,16 @@ def download(params):
 
 
 def analyze(params):
-    geom = params.get('geom')
-    if geom:
+    if 'geom' in params:
         query = ANALYSIS_GEOM.format(**params)
     else:
         query = ANALYSIS.format(**params)
-    result = cdb.execute(query)
+    return cdb.execute(query)
+
+
+def parse_analysis(content):
+    result = json.loads(content)['rows']
     if result:
-        result = json.loads(result)['rows']
-        if result:
-          result[0]['value'] = result[0]['value'] / 10000.0
-          result[1]['value'] = result[1]['value'] / 10000.0
+        result[0]['value'] = result[0]['value'] / 10000.0
+        result[1]['value'] = result[1]['value'] / 10000.0
     return result
