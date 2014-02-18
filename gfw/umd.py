@@ -28,14 +28,9 @@ import copy
 
 from gfw import cdb
 
-ALL = """SELECT iso, year, loss_gt_0 loss, gain_annual gain
-         FROM umd_1
-         WHERE iso ilike '{iso}'
-         ORDER BY iso, year ASC"""
-
 SUM = """SELECT iso, sum(loss_gt_0) loss, avg(gain) gain
          FROM umd_1
-         WHERE iso ilike '{iso}'
+         WHERE year >= {begin} AND year <= {end} AND iso ilike '{iso}'
          GROUP BY iso"""
 
 
@@ -99,13 +94,13 @@ def _gain_area(row):
     return row['year'], row['gain']
 
 
-def _cdb(iso):
-    query = SUM.format(iso=iso)
+def _cdb(params):
+    query = SUM.format(**params)
     logging.info(query)
     result = cdb.execute(query, {})
     if result:
         result = json.loads(result.content)['rows'][0]
-        return dict(iso=iso, loss_area=result['loss'],
+        return dict(iso=params.get('iso'), loss_area=result['loss'],
                     gain_area=result['gain'])
 
 
@@ -127,7 +122,7 @@ def analyze(params):
         return result
     elif iso:
         iso = iso.upper()
-        result = _cdb(iso)
+        result = _cdb(params)
         result['begin'] = params['begin']
         result['end'] = params['end']
         result['units'] = 'Ha'
