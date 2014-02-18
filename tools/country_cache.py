@@ -3,6 +3,8 @@ from dateutil.relativedelta import relativedelta
 import itertools
 import requests
 import urllib
+import os
+
 
 FORMATS = ['shp', 'csv', 'kml', 'geojson', 'svg']
 
@@ -18,6 +20,9 @@ API_ANALYSIS_URL = \
 
 # (dataset, begin, end, iso, format)
 FILE_NAME = '%s_%s_%s_%s.%s'
+
+# (dataset, begin, end, iso)
+ANALYSIS_FILENAME = '%s_%s_%s_%s.json'
 
 
 def get_iso_codes():
@@ -53,6 +58,29 @@ def forma_cache_params():
                 yield fmt, iso, begin, end
 
 
+def cache_forma():
+    os.chdir('gcs')
+    for params in forma_cache_params():
+        fmt, iso, begin, end = params
+        url = API_ANALYSIS_URL % ('forma', iso, begin, end)
+        response = requests.get(url)
+        if not response.json()['value']:
+            print 'No alerts for %s' % url
+        else:
+            filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
+            with open(filename, 'wb') as fd:
+                for chunk in response.iter_content(chunk_size=10000):
+                    fd.write(chunk)
+            url = API_DOWNLOAD_URL % ('forma', fmt, iso, begin, end)
+            print url
+            filename = FILE_NAME % ('forma', begin, end, iso, fmt)
+            print filename
+            response = requests.get(url)
+            with open(filename, 'wb') as fd:
+                for chunk in response.iter_content(chunk_size=10000):
+                    fd.write(chunk)
+
+
 def test_forma():
     max_cache = 2
     count = 0
@@ -74,3 +102,5 @@ def test_forma():
             for chunk in response.iter_content(chunk_size=10000):
                 fd.write(chunk)
 
+if __name__ == '__main__':
+    cache_forma()
