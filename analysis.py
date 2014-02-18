@@ -69,12 +69,10 @@ class GCSServingHandler(blobstore_handlers.BlobstoreDownloadHandler):
 class Cache():
     @classmethod
     def forma(cls, key, params):
-        logging.info('HI')
         params['dataset'] = 'forma'
         filename = '{dataset}_{begin}_{end}_{iso}.json' \
             .format(**params)
         gcs_path = gcs.exists(filename)
-        logging.info('GCS_PATH %s' % gcs_path)
         if gcs_path:
             blobstore_filename = '/gs%s' % gcs_path
             blob_key = blobstore.create_gs_key(blobstore_filename)
@@ -82,7 +80,6 @@ class Cache():
             value = blob_reader.read()
             entry = AnalysisEntry(id=blob_key, value=value)
             entry.put()
-            logging.info('BOOM')
             return entry
 
     @classmethod
