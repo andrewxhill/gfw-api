@@ -34,11 +34,11 @@ gcs.set_default_retry_params(RETRY_PARAMS)
 def exists(filename):
     try:
         path = '/'.join([COUNTRY_BUCKET, filename])
-        logging.info('FILENAME %s' % path)
         gcs.stat(path)
+        logging.info('GCS EXISTS %s' % path)
         return path
     except:
-        logging.info('SHIT')
+        logging.info('GCS NOT FOUND %s' % filename)
         return None
 
 

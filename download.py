@@ -55,29 +55,26 @@ _CONTENT_TYPES = {
 class Cache():
     @classmethod
     def forma(cls, key, params, fmt):
-        logging.info('HI')
         params['dataset'] = 'forma'
         params['fmt'] = fmt
         filename = '{dataset}_{begin}_{end}_{iso}.{fmt}' \
             .format(**params)
         gcs_path = gcs.exists(filename)
-        logging.info('GCS_PATH %s' % gcs_path)
         if gcs_path:
             blobstore_filename = '/gs%s' % gcs_path
             blob_key = blobstore.create_gs_key(blobstore_filename)
             entry = DownloadEntry(id=key, blob_key=blob_key)
             entry.put()
-            logging.info('BOOM')
             return entry
 
     @classmethod
     def get(cls, key, dataset, params, fmt, bust):
-        entry = DownloadEntry.get_by_id(key)
-        if entry and not bust:
-            return entry
-        else:
-            if dataset == 'forma':
-                return cls.forma(key, params, fmt)
+        if not bust:
+            entry = DownloadEntry.get_by_id(key)
+            if entry and entry.blob_key:
+                return entry
+        if dataset == 'forma':
+            return cls.forma(key, params, fmt)
 
 
 def _download(dataset, params):
@@ -92,7 +89,7 @@ def _download(dataset, params):
 
 class DownloadEntry(ndb.Model):
     """Download cache entry for datastore."""
-    value = ndb.TextProperty()
+    cdb_url = ndb.TextProperty()
     blob_key = ndb.TextProperty()
 
 
@@ -127,18 +124,15 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
 
         try:
             entry = Cache.get(rid, dataset, params, fmt, bust)
-            if entry:
-                if entry.blob_key:
-                    self.send_blob(entry.blob_key)
-                else:
-                    self._redirect(entry.value)
+            if entry and entry.blob_key:
+                self.send_blob(entry.blob_key)
+            elif entry and entry.cdb_url:
+                self._redirect(entry.cdb_url)
             else:
                 url = _download(dataset, params)
                 response = urlfetch.fetch(url, method='HEAD', deadline=60)
                 if response.status_code == 200:
-                    DownloadEntry(id=rid, value=url).put()
-                    monitor.log(self.request.url, 'Download %s' % dataset,
-                                headers=self.request.headers)
+                    DownloadEntry(id=rid, cdb_url=url).put()
                     self._redirect(url)
                 else:
                     raise Exception('CartoDB status=%s, content=%s' %
