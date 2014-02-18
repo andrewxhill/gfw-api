@@ -11,7 +11,7 @@ import urllib2
 
 FORMATS = ['shp', 'csv', 'kml', 'geojson', 'svg']
 
-CDB_BASE_URL = 'http://wri-01.cartodb.com/api/v1/sql?'
+CDB_BASE_URL = 'http://wri-01.cartodb.com/api/v2/sql?'
 
 # (dataset, format, iso, begin, end)
 API_DOWNLOAD_URL = \
