@@ -131,6 +131,8 @@ def worker(queue):
                         fd.write(chunk)
         except Queue.Empty:
             queue_full = False
+        except Exception, e:
+            print 'FAIL: %s (%s)' % (url, e)
 
 
 if __name__ == '__main__':
