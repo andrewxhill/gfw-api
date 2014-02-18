@@ -1,9 +1,9 @@
 
 You have subscribed to forest change alerts through Global Forest Watch. This message reports new forest change alerts for one of your areas of interest (a country or self-drawn polygon).
 
-{notification.value} {notification.unit} were detected within your area of interest. Explore on Global Forest Watch here. 
+{alert[value]} {alert[dataset]} {alert[unit]} were detected within your area of interest. Explore the details of this dataset on Global Forest Watch <a href="http://globalforestwatch.com/sources#forest_change">here</a>. 
 
-Coordinates for your area of interest (a country or self-drawn polygon):
+Your area of interest (a country or self-drawn polygon):
 
 <img src="{map-url}"/>
 

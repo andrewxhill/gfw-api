@@ -77,13 +77,13 @@ GET = """SELECT countries.iso, countries.name, countries.enabled, countries.lat,
 def has_alerts(params):
     return json.loads(
         cdb.execute(
-            HAS_ALERTS.format(**params)))['rows'][0]['count'] != 0
+            HAS_ALERTS.format(**params)).content)['rows'][0]['count'] != 0
 
 
 def get(params):
     query = ALERTS_ALL_COUNT.format(**params)
     alerts_count = json.loads(
-        cdb.execute(query, params))['rows'][0]['alerts_count']
+        cdb.execute(query, params).content)['rows'][0]['alerts_count']
     if not 'order' in params:
         params['order'] = ''
     if 'iso' in params:
@@ -99,5 +99,5 @@ def get(params):
         query = GET.format(**params)
     result = cdb.execute(query, params)
     if result:
-        countries = json.loads(result)['rows']
+        countries = json.loads(result.content)['rows']
     return dict(total_count=alerts_count, countries=countries)

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document><Folder><name>cartodb_query</name>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#cartodb_query">
+		<SimpleData name="x">127191</SimpleData>
+		<SimpleData name="y">72779</SimpleData>
+		<SimpleData name="z">17</SimpleData>
+		<SimpleData name="p">74</SimpleData>
+		<SimpleData name="date">2006/02/28 23:00:00+00</SimpleData>
+		<SimpleData name="iso">VUT</SimpleData>
+		<SimpleData name="gadm2">206617</SimpleData>
+		<SimpleData name="ecoregion">10126</SimpleData>
+		<SimpleData name="lat">-19.50625</SimpleData>
+		<SimpleData name="lon">169.3423059901391</SimpleData>
+		<SimpleData name="created_at">2014/01/14 09:40:21+00</SimpleData>
+		<SimpleData name="updated_at">2014/01/14 09:40:46+00</SimpleData>
+		<SimpleData name="cartodb_id">1391697</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>169.342305990139096,-19.50625</coordinates></Point>
+  </Placemark>
+</Folder>
+<Schema name="cartodb_query" id="cartodb_query">
+	<SimpleField name="x" type="float"></SimpleField>
+	<SimpleField name="y" type="float"></SimpleField>
+	<SimpleField name="z" type="float"></SimpleField>
+	<SimpleField name="p" type="string"></SimpleField>
+	<SimpleField name="date" type="string"></SimpleField>
+	<SimpleField name="iso" type="string"></SimpleField>
+	<SimpleField name="gadm2" type="string"></SimpleField>
+	<SimpleField name="ecoregion" type="string"></SimpleField>
+	<SimpleField name="lat" type="string"></SimpleField>
+	<SimpleField name="lon" type="string"></SimpleField>
+	<SimpleField name="created_at" type="string"></SimpleField>
+	<SimpleField name="updated_at" type="string"></SimpleField>
+	<SimpleField name="cartodb_id" type="int"></SimpleField>
+</Schema>
+</Document></kml>

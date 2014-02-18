@@ -24,7 +24,7 @@ ANALYSIS = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
 WHERE m.date = '{date}'::date
       AND m.country = c.name
-      AND c.iso3 = '{iso}'
+      AND c.iso3 ilike '{iso}'
 GROUP BY c.the_geom"""
 
 ANALYSIS_GEOM = """SELECT count(*) AS total {select_geom}
@@ -41,7 +41,7 @@ def download(params):
         query = ANALYSIS_GEOM.format(**params)
     else:
         query = ANALYSIS.format(**params)
-    return cdb.execute(query, params)
+    return cdb.get_url(query, params=dict(format=params['format']))
 
 
 def analyze(params):
@@ -53,11 +53,13 @@ def analyze(params):
         query = ANALYSIS_GEOM.format(**params)
     else:
         query = ANALYSIS.format(**params)
-    result = cdb.execute(query)
-    if result:
-        rows = json.loads(result)['rows']
-        if rows:
-            result = rows[0]
-        else:
-            result = dict(total=0)
+    return cdb.execute(query)
+
+
+def parse_analysis(content):
+    rows = json.loads(content)['rows']
+    if rows:
+        result = rows[0]
+    else:
+        result = dict(total=0)
     return result

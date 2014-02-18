@@ -14,16 +14,18 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- 
+
 """This module supports stories."""
- 
+
 import json
 from appengine_config import runtime_config
 from gfw import cdb
 import datetime
- 
+
+
 TABLE = 'stories_dev' if runtime_config.get('IS_DEV') else 'community_stories'
- 
+
+
 INSERT = """INSERT INTO {table}
   (details, email, featured, name, title, token, visible, date, location,
    the_geom, media)
@@ -33,28 +35,29 @@ INSERT = """INSERT INTO {table}
    ST_SetSRID(ST_GeomFromGeoJSON('{geom}'), 4326), '{media}')
   RETURNING details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_AsGeoJSON(the_geom) as geom, media, token"""
- 
+
+
 LIST = """SELECT details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_Y(the_geom) AS lat, ST_X(the_geom) AS lng, media
 FROM {table}
 WHERE visible = True {and_where}"""
- 
- 
+
+
 GET = """SELECT details, email, featured, name, title, visible, date,
     location, cartodb_id as id, ST_Y(the_geom) || ',' || ST_X(the_geom) AS coordinates, media,
     ST_AsGeoJSON(the_geom) as the_geom, when_did_it_happen, where_did_it_happen
 FROM {table}
 WHERE cartodb_id = {id}"""
- 
- 
+
+
 def _prep_story(story):
     if 'geom' in story:
         story['geom'] = json.loads(story['geom'])
     if 'media' in story:
         story['media'] = json.loads(story['media'])
     return story
- 
- 
+
+
 def create(params):
     """Create new story with params."""
     props = dict(details='', email='', featured='False', name='',
@@ -66,11 +69,9 @@ def create(params):
     props['geom'] = json.dumps(props['geom'])
     if 'media' in props:
         props['media'] = json.dumps(props['media'])
-    import logging
-    # logging.info('STORY PROPS %s' % props)
-    return cdb.execute(INSERT.format(**props), api_key=True)
- 
- 
+    return cdb.execute(INSERT.format(**props), auth=True)
+
+
 def list(params):
     and_where = ''
     if 'geom' in params:
@@ -81,18 +82,20 @@ def list(params):
     if and_where:
         and_where = and_where.format(**params)
     result = cdb.execute(
-        LIST.format(and_where=and_where, table=TABLE), api_key=True)
+        LIST.format(and_where=and_where, table=TABLE), auth=True)
     if result:
-        data = json.loads(result)
+        data = json.loads(result.content)
         if 'total_rows' in data and data['total_rows'] > 0:
             return map(_prep_story, data['rows'])
- 
- 
+
+
 def get(params):
     params['table'] = TABLE
-    result = cdb.execute(GET.format(**params), api_key=True)
+    result = cdb.execute(GET.format(**params), auth=True)
+    if result.status_code != 200:
+        raise Exception('CaroDB error getting story (%s)' % result.content)
     if result:
-        data = json.loads(result)
+        data = json.loads(result.content)
         if 'total_rows' in data and data['total_rows'] == 1:
             story = data['rows'][0]
             return _prep_story(story)

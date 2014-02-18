@@ -23,3 +23,5 @@ queue:
   rate: 35/s
 - name: pubsub-publish
   rate: 35/s    
+- name: log
+  rate: 35/s    
