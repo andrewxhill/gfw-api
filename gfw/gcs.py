@@ -18,6 +18,7 @@
 """This module supports reading and writing to Google Cloud Storage."""
 
 import cloudstorage as gcs
+import logging
 
 ANALYSIS_BUCKET = '/gfw-apis-analysis'
 COUNTRY_BUCKET = '/gfw-apis-country'
@@ -29,13 +30,17 @@ RETRY_PARAMS = gcs.RetryParams(initial_delay=0.2,
 
 gcs.set_default_retry_params(RETRY_PARAMS)
 
+
 def exists(filename):
-	try:
-		path = ''.join([COUNTRY_BUCKET, filename])
-		gcs.stat(filename)
-		return True
-	except:
-		return False
+    try:
+        path = '/'.join([COUNTRY_BUCKET, filename])
+        logging.info('FILENAME %s' % path)
+        gcs.stat(path)
+        return path
+    except:
+        logging.info('SHIT')
+        return None
+
 
 def create_file(value, filename, content_type):
     """Create a file.

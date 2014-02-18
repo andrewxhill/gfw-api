@@ -27,6 +27,7 @@ CONTENT_TYPES = {
     'svg': 'image/svg+xml',
     'csv': 'application/csv',
     'geojson': 'application/json',
+    'json': 'application/json'
 }
 
 

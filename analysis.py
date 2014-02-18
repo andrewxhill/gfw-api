@@ -19,11 +19,14 @@ import webapp2
 import monitor
 import common
 import json
+import logging
 
 from appengine_config import runtime_config
 
-from gfw import forma, imazon, modis, umd
+from gfw import forma, imazon, modis, umd, gcs
 
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import ndb
 
 # Support datasets for analysis.
@@ -57,18 +60,39 @@ def _parse_analysis(dataset, content):
     raise ValueError('Unsupported dataset for parse analysis %s' % dataset)
 
 
+class GCSServingHandler(blobstore_handlers.BlobstoreDownloadHandler):
+    def get(self):
+        blob_key = self.request.get('blob_key')
+        self.send_blob(blob_key)
+
+
 class Cache():
-    def get(key, dataset, params={}):
+    @classmethod
+    def forma(cls, key, params):
+        logging.info('HI')
+        params['dataset'] = 'forma'
+        filename = '{dataset}_{begin}_{end}_{iso}.json' \
+            .format(**params)
+        gcs_path = gcs.exists(filename)
+        logging.info('GCS_PATH %s' % gcs_path)
+        if gcs_path:
+            blobstore_filename = '/gs%s' % gcs_path
+            blob_key = blobstore.create_gs_key(blobstore_filename)
+            blob_reader = blobstore.BlobReader(blob_key)
+            value = blob_reader.read()
+            entry = AnalysisEntry(id=blob_key, value=value)
+            entry.put()
+            logging.info('BOOM')
+            return entry
+
+    @classmethod
+    def get(cls, key, dataset, params, bust):
         entry = AnalysisEntry.get_by_id(key)
-        if entry:
+        if entry and not bust:
             return entry
         else:
-            if 'begin' in params and 'end' in params and 'iso' in params:
-                params['dataset'] = dataset
-                path = '/gfw-apis-country/{dataset}-{begin}-{end}-{iso}.json' \
-                    .format(**params)
-                blob_key = blobstore.create_gs_key('/gs%s' % path)
-                if gcs.exists(filename):
+            if dataset == 'forma':
+                return cls.forma(key, params)
 
 
 class AnalysisEntry(ndb.Model):
@@ -101,8 +125,8 @@ class Analysis(common.BaseApi):
             params.pop('bust')
         else:
             bust = False
-        entry = AnalysisEntry.get_by_id(rid)
-        if entry and not bust:
+        entry = Cache.get(rid, dataset, params, bust)
+        if entry:
             monitor.log(self.request.url, 'Analyze %s' % dataset,
                         headers=self.request.headers)
             self._send_response(entry.value)

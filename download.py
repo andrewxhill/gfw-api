@@ -18,14 +18,16 @@
 import webapp2
 import monitor
 import common
+import logging
 
 from appengine_config import runtime_config
 
-from gfw import forma, imazon, modis
+from gfw import forma, imazon, modis, gcs
 
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.api import urlfetch
 from google.appengine.ext import ndb
-from google.appengine.ext.webapp import blobstore_handlers
 
 # Support datasets for download.
 _DATASETS = ['imazon', 'forma', 'modis']
@@ -50,6 +52,34 @@ _CONTENT_TYPES = {
 }
 
 
+class Cache():
+    @classmethod
+    def forma(cls, key, params, fmt):
+        logging.info('HI')
+        params['dataset'] = 'forma'
+        params['fmt'] = fmt
+        filename = '{dataset}_{begin}_{end}_{iso}.{fmt}' \
+            .format(**params)
+        gcs_path = gcs.exists(filename)
+        logging.info('GCS_PATH %s' % gcs_path)
+        if gcs_path:
+            blobstore_filename = '/gs%s' % gcs_path
+            blob_key = blobstore.create_gs_key(blobstore_filename)
+            entry = DownloadEntry(id=key, blob_key=blob_key)
+            entry.put()
+            logging.info('BOOM')
+            return entry
+
+    @classmethod
+    def get(cls, key, dataset, params, fmt, bust):
+        entry = DownloadEntry.get_by_id(key)
+        if entry and not bust:
+            return entry
+        else:
+            if dataset == 'forma':
+                return cls.forma(key, params, fmt)
+
+
 def _download(dataset, params):
     if dataset == 'imazon':
         return imazon.download(params)
@@ -63,6 +93,7 @@ def _download(dataset, params):
 class DownloadEntry(ndb.Model):
     """Download cache entry for datastore."""
     value = ndb.TextProperty()
+    blob_key = ndb.TextProperty()
 
 
 class Download(blobstore_handlers.BlobstoreDownloadHandler):
@@ -93,13 +124,15 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         params['format'] = fmt
         rid = common._get_request_id(self.request, params)
         bust = params.get('bust')
-        entry = DownloadEntry.get_by_id(rid)
-        if entry and not bust:
-            monitor.log(self.request.url, 'Download %s' % dataset,
-                        headers=self.request.headers)
-            self._redirect(entry.value)
-        else:
-            try:
+
+        try:
+            entry = Cache.get(rid, dataset, params, fmt, bust)
+            if entry:
+                if entry.blob_key:
+                    self.send_blob(entry.blob_key)
+                else:
+                    self._redirect(entry.value)
+            else:
                 url = _download(dataset, params)
                 response = urlfetch.fetch(url, method='HEAD', deadline=60)
                 if response.status_code == 200:
@@ -110,12 +143,12 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
                 else:
                     raise Exception('CartoDB status=%s, content=%s' %
                                     (response.status_code, response.content))
-            except Exception, e:
-                name = e.__class__.__name__
-                msg = 'Error: Download %s (%s)' % (dataset, name)
-                monitor.log(self.request.url, msg, error=e,
-                            headers=self.request.headers)
-                self._send_error()
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Download %s (%s)' % (dataset, name)
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
+            self._send_error()
 
 
 routes = [webapp2.Route(_ROUTE, handler=Download)]
