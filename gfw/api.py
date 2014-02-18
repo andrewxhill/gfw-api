@@ -24,6 +24,7 @@ import random
 import re
 import webapp2
 import monitor
+import logging
 
 from gfw import common
 from gfw import countries
@@ -107,7 +108,7 @@ class StoriesApi(BaseApi):
         sender = \
             'Global Forest Watch Stories <noreply@gfw-apis.appspotmail.com>'
         to = runtime_config.get('wri_emails_stories')
-        story_url = 'http://gfw-beta.org/stories/%s' % story['id']
+        story_url = 'http://globalforestwatch.org/stories/%s' % story['id']
         api_url = '%s/stories/%s' % (common.APP_BASE_URL, story['id'])
         token = story['token']
         body = 'Story URL: %s\nStory API: %s\nStory token: %s' % \
@@ -148,7 +149,7 @@ class StoriesApi(BaseApi):
         params['token'] = self._gen_token()
         result = stories.create(params)
         if result:
-            story = json.loads(result)['rows'][0]
+            story = json.loads(result.content)['rows'][0]
             story['media'] = json.loads(story['media'])
             self.response.set_status(201)
         else:
@@ -156,7 +157,7 @@ class StoriesApi(BaseApi):
             self.response.set_status(400)
         taskqueue.add(url='/stories/email', params=story,
                       queue_name="story-new-emails")
-        self.response.out.write(story)
+        self._send_response(json.dumps(story))
 
     def get(self, id):
         try:

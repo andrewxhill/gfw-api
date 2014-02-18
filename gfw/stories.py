@@ -20,6 +20,7 @@
 import json
 from appengine_config import runtime_config
 from gfw import cdb
+import datetime
 
 
 TABLE = 'stories_dev' if runtime_config.get('IS_DEV') else 'community_stories'
@@ -60,9 +61,11 @@ def _prep_story(story):
 def create(params):
     """Create new story with params."""
     props = dict(details='', email='', featured='False', name='',
-                 title='', token='', visible='True', date='null',
+                 title='', token='', visible='True', date='',
                  location='', geom='', media='[]', table=TABLE)
     props.update(params)
+    if not props.get('date'):
+        props['date'] = str(datetime.datetime.now())
     props['geom'] = json.dumps(props['geom'])
     if 'media' in props:
         props['media'] = json.dumps(props['media'])
