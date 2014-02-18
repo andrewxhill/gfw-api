@@ -27,7 +27,7 @@ ANALYSIS_FILENAME = '%s_%s_%s_%s.json'
 
 def get_iso_codes():
     """Return list of distinct ISO codes."""
-    sql = 'SELECT distinct(iso) FROM cdm_latest ORDER BY iso desc'
+    sql = 'SELECT distinct(iso) FROM forma_api ORDER BY iso desc'
     params = urllib.urlencode(dict(q=sql))
     url = '%s%s' % (CDB_BASE_URL, params)
     return map(lambda x: x['iso'], requests.get(url).json()['rows'])
