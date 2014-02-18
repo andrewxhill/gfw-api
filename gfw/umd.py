@@ -44,7 +44,6 @@ def _get_coords(geojson):
 
 
 def _sum_range(data, begin, end):
-    logging.info('DATA %s' % data)
     return sum(
         [value for key, value in data.iteritems()
             if (int(key) >= int(begin)) and (int(key) <= int(end))])
@@ -102,6 +101,7 @@ def _gain_area(row):
 
 def _cdb(iso):
     query = SUM.format(iso=iso)
+    logging.info(query)
     result = cdb.execute(query, {})
     if result:
         result = json.loads(result.content)['rows'][0]

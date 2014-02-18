@@ -60,6 +60,10 @@ handlers:
 - url: /gee.*
   script: gfw.gee_tiles.api
 
+- url: /admin.*
+  script: admin.handlers
+  login: admin
+
 - url: /.*
   script: gfw.api.handlers
 

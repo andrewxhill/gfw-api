@@ -19,11 +19,14 @@ import webapp2
 import monitor
 import common
 import json
+import logging
 
 from appengine_config import runtime_config
 
-from gfw import forma, imazon, modis, umd
+from gfw import forma, imazon, modis, umd, gcs
 
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import ndb
 
 # Support datasets for analysis.
@@ -57,6 +60,38 @@ def _parse_analysis(dataset, content):
     raise ValueError('Unsupported dataset for parse analysis %s' % dataset)
 
 
+class GCSServingHandler(blobstore_handlers.BlobstoreDownloadHandler):
+    def get(self):
+        blob_key = self.request.get('blob_key')
+        self.send_blob(blob_key)
+
+
+class Cache():
+    @classmethod
+    def forma(cls, key, params):
+        params['dataset'] = 'forma'
+        filename = '{dataset}_{begin}_{end}_{iso}.json' \
+            .format(**params)
+        gcs_path = gcs.exists(filename)
+        if gcs_path:
+            blobstore_filename = '/gs%s' % gcs_path
+            blob_key = blobstore.create_gs_key(blobstore_filename)
+            blob_reader = blobstore.BlobReader(blob_key)
+            value = blob_reader.read()
+            entry = AnalysisEntry(id=blob_key, value=value)
+            entry.put()
+            return entry
+
+    @classmethod
+    def get(cls, key, dataset, params, bust):
+        if not bust:
+            entry = AnalysisEntry.get_by_id(key)
+            if entry:
+                return entry
+        if dataset == 'forma':
+            return cls.forma(key, params)
+
+
 class AnalysisEntry(ndb.Model):
     """Analysis cache entry for datastore."""
     value = ndb.TextProperty()
@@ -82,41 +117,34 @@ class Analysis(common.BaseApi):
     def post(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
-        if 'bust' in params:
-            bust = True
+        bust = params.get('bust')
+        if bust:
             params.pop('bust')
-        else:
-            bust = False
-        entry = AnalysisEntry.get_by_id(rid)
-        if entry and not bust:
-            monitor.log(self.request.url, 'Analyze %s' % dataset,
-                        headers=self.request.headers)
+
+        # try:
+        entry = Cache.get(rid, dataset, params, bust)
+        if entry:
             self._send_response(entry.value)
         else:
-            try:
-                response = _analyze(dataset, params)
-                if dataset == 'umd':
-                    value = json.dumps(response)
-                    AnalysisEntry(id=rid, value=value).put()
-                    monitor.log(self.request.url, 'Analyze %s' % dataset,
-                                headers=self.request.headers)
-                    self._send_response(value)
-                elif response.status_code == 200:
-                    result = _parse_analysis(dataset, response.content)
-                    value = json.dumps(result)
-                    AnalysisEntry(id=rid, value=value).put()
-                    monitor.log(self.request.url, 'Analyze %s' % dataset,
-                                headers=self.request.headers)
-                    self._send_response(value)
-                else:
-                    raise Exception('CartoDB Failed (status=%s, content=%s)' %
-                                   (response.status_code, response.content))
-            except Exception, e:
-                name = e.__class__.__name__
-                msg = 'Error: Analyze %s (%s)' % (dataset, name)
-                monitor.log(self.request.url, msg, error=e,
-                            headers=self.request.headers)
-                self._send_error()
+            response = _analyze(dataset, params)
+            if dataset == 'umd':
+                value = json.dumps(response)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
+            elif response.status_code == 200:
+                result = _parse_analysis(dataset, response.content)
+                value = json.dumps(result)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
+            else:
+                raise Exception('CartoDB Failed (status=%s, content=%s)' %
+                                (response.status_code, response.content))
+        # except Exception, e:
+        #     name = e.__class__.__name__
+        #     msg = 'Error: Analyze %s (%s)' % (dataset, name)
+        #     monitor.log(self.request.url, msg, error=e,
+        #                 headers=self.request.headers)
+        #     self._send_error()
 
 
 routes = [webapp2.Route(_ROUTE, handler=Analysis)]
