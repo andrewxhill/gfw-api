@@ -68,14 +68,49 @@ def download(params):
 def analyze(params):
     if 'geom' in params:
         query = ANALYSIS_GEOM.format(**params)
-    else:
-        query = ANALYSIS.format(**params)
+    elif 'iso' in params:
+        iso = params.get('iso').upper()
+        if iso == 'BRA':
+            query = ANALYSIS.format(**params)
+        else:
+            query = "select * from imazon_clean2 where orig_oid = '-999'"
     return cdb.execute(query)
 
 
 def parse_analysis(content):
-    result = json.loads(content)['rows']
-    if result:
-        result[0]['value'] = result[0]['value'] / 10000.0
-        result[1]['value'] = result[1]['value'] / 10000.0
-    return result
+    try:
+        result = json.loads(content)['rows']
+        if result:
+            result[0]['value'] = result[0]['value'] / 10000.0
+            result[1]['value'] = result[1]['value'] / 10000.0
+        else:
+            result = [
+                {
+                    "units": "hectares",
+                    "value": 0,
+                    "data_type": "degrad",
+                    "name": "Imazon"
+                },
+                {
+                    "units": "hectares",
+                    "value": 0,
+                    "data_type": "defor",
+                    "name": "Imazon"
+                }
+            ]
+        return result
+    except:
+        return [
+            {
+                "units": "hectares",
+                "value": 0,
+                "data_type": "degrad",
+                "name": "Imazon"
+            },
+            {
+                "units": "hectares",
+                "value": 0,
+                "data_type": "defor",
+                "name": "Imazon"
+            }
+        ]
