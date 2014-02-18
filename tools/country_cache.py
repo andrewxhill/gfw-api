@@ -82,14 +82,19 @@ def worker(queue):
             if response.status_code != 200:
                 print 'ERROR ANALYSIS: %s (%s)' % (response.text, params)
                 continue
-            if not response.json()['value']:
+            elif not response.json()['value']:
                 print 'No alerts for %s' % url
                 continue
             else:
+                # Analysis result:
                 filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
                 with open(filename, 'wb') as fd:
                     for chunk in response.iter_content(chunk_size=10000):
                         fd.write(chunk)
+                path = os.path.abspath(filename)
+                print subprocess.check_output(['gsutil', 'cp', path,
+                                              'gs://gfw-apis-country'])
+                # Download result:
                 url = API_DOWNLOAD_URL % ('forma', fmt, iso, begin, end)
                 filename = FILE_NAME % ('forma', begin, end, iso, fmt)
                 response = requests.get(url)
@@ -100,7 +105,8 @@ def worker(queue):
                     for chunk in response.iter_content(chunk_size=10000):
                         fd.write(chunk)
                 path = os.path.abspath(filename)
-                print subprocess.check_output(['gsutil', 'cp', path, 'gs://gfw-apis-country'])
+                print subprocess.check_output(['gsutil', 'cp', path,
+                                              'gs://gfw-apis-country'])
         except Queue.Empty:
             queue_full = False
         except Exception, e:
@@ -117,5 +123,5 @@ if __name__ == '__main__':
 
     thread_count = 25
     for i in range(thread_count):
-        t = threading.Thread(target=worker, args = (q,))
+        t = threading.Thread(target=worker, args=(q,))
         t.start()
