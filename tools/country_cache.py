@@ -6,10 +6,7 @@ import urllib
 import os
 import Queue
 import threading
-import urllib2
 import subprocess
-from subprocess import call
-
 
 FORMATS = ['shp', 'csv', 'kml', 'geojson', 'svg']
 
@@ -77,26 +74,37 @@ def worker(queue):
             params = queue.get(False)
             fmt, iso, begin, end = params
             print 'Processing %s...' % iso
-            url = API_ANALYSIS_URL % ('forma', iso, begin, end)
-            response = requests.get(url)
-            if response.status_code != 200:
-                print 'ERROR ANALYSIS: %s (%s)' % (response.text, params)
-                continue
-            elif not response.json()['value']:
-                print 'No alerts for %s' % url
-                continue
+
+            # Process analysis results, skip it if file exists.
+            filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
+            if os.path.exists(filename):
+                print 'Skipping %s' % filename
             else:
-                # Analysis result:
-                filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
-                with open(filename, 'wb') as fd:
-                    for chunk in response.iter_content(chunk_size=10000):
-                        fd.write(chunk)
-                path = os.path.abspath(filename)
-                print subprocess.check_output(['gsutil', 'cp', path,
-                                              'gs://gfw-apis-country'])
+                url = API_ANALYSIS_URL % ('forma', iso, begin, end)
+                response = requests.get(url)
+                if response.status_code != 200:
+                    print 'ERROR ANALYSIS: %s (%s)' % (response.text, params)
+                    continue
+                elif not response.json()['value']:
+                    print 'No alerts for %s' % url
+                    continue
+                else:
+                    # Analysis result:
+                    filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
+                    with open(filename, 'wb') as fd:
+                        for chunk in response.iter_content(chunk_size=10000):
+                            fd.write(chunk)
+                    path = os.path.abspath(filename)
+                    print subprocess.check_output(['gsutil', 'cp', path,
+                                                  'gs://gfw-apis-country'])
+
+            # Process download results, skip if file exists.
+            filename = FILE_NAME % ('forma', begin, end, iso, fmt)
+            if os.path.exists(filename):
+                print 'Skipping %s' % filename
+            else:
                 # Download result:
                 url = API_DOWNLOAD_URL % ('forma', fmt, iso, begin, end)
-                filename = FILE_NAME % ('forma', begin, end, iso, fmt)
                 response = requests.get(url)
                 if response.status_code != 200:
                     print 'ERROR: %s' % response.text
@@ -121,7 +129,7 @@ if __name__ == '__main__':
     for params in forma_cache_params():
         q.put(params)
 
-    thread_count = 25
+    thread_count = 3
     for i in range(thread_count):
         t = threading.Thread(target=worker, args=(q,))
         t.start()
