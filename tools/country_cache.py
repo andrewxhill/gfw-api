@@ -4,6 +4,9 @@ import itertools
 import requests
 import urllib
 import os
+import Queue
+import threading
+import urllib2
 
 
 FORMATS = ['shp', 'csv', 'kml', 'geojson', 'svg']
@@ -102,5 +105,40 @@ def test_forma():
             for chunk in response.iter_content(chunk_size=10000):
                 fd.write(chunk)
 
+
+#define a worker function
+def worker(queue):
+    queue_full = True
+    while queue_full:
+        try:
+            fmt, iso, begin, end = queue.get(False)
+            url = API_ANALYSIS_URL % ('forma', iso, begin, end)
+            response = requests.get(url)
+            if not response.json()['value']:
+                print 'No alerts for %s' % url
+            else:
+                filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
+                with open(filename, 'wb') as fd:
+                    for chunk in response.iter_content(chunk_size=10000):
+                        fd.write(chunk)
+                url = API_DOWNLOAD_URL % ('forma', fmt, iso, begin, end)
+                print url
+                filename = FILE_NAME % ('forma', begin, end, iso, fmt)
+                print filename
+                response = requests.get(url)
+                with open(filename, 'wb') as fd:
+                    for chunk in response.iter_content(chunk_size=10000):
+                        fd.write(chunk)
+        except Queue.Empty:
+            queue_full = False
+
+
 if __name__ == '__main__':
-    cache_forma()
+    q = Queue.Queue()
+    for params in forma_cache_params():
+        q.put(params)
+
+    thread_count = 100
+    for i in range(thread_count):
+        t = threading.Thread(target=worker, args = (q,))
+        t.start()
