@@ -20,6 +20,7 @@
 import cloudstorage as gcs
 
 ANALYSIS_BUCKET = '/gfw-apis-analysis'
+COUNTRY_BUCKET = '/gfw-apis-country'
 
 RETRY_PARAMS = gcs.RetryParams(initial_delay=0.2,
                                max_delay=5.0,
@@ -28,6 +29,13 @@ RETRY_PARAMS = gcs.RetryParams(initial_delay=0.2,
 
 gcs.set_default_retry_params(RETRY_PARAMS)
 
+def exists(filename):
+	try:
+		path = ''.join([COUNTRY_BUCKET, filename])
+		gcs.stat(filename)
+		return True
+	except:
+		return False
 
 def create_file(value, filename, content_type):
     """Create a file.

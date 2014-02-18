@@ -57,6 +57,20 @@ def _parse_analysis(dataset, content):
     raise ValueError('Unsupported dataset for parse analysis %s' % dataset)
 
 
+class Cache():
+    def get(key, dataset, params={}):
+        entry = AnalysisEntry.get_by_id(key)
+        if entry:
+            return entry
+        else:
+            if 'begin' in params and 'end' in params and 'iso' in params:
+                params['dataset'] = dataset
+                path = '/gfw-apis-country/{dataset}-{begin}-{end}-{iso}.json' \
+                    .format(**params)
+                blob_key = blobstore.create_gs_key('/gs%s' % path)
+                if gcs.exists(filename):
+
+
 class AnalysisEntry(ndb.Model):
     """Analysis cache entry for datastore."""
     value = ndb.TextProperty()
