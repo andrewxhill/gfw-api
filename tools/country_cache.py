@@ -111,36 +111,46 @@ def worker(queue):
     queue_full = True
     while queue_full:
         try:
-            fmt, iso, begin, end = queue.get(False)
+            params = queue.get(False)
+            fmt, iso, begin, end = params
             url = API_ANALYSIS_URL % ('forma', iso, begin, end)
             response = requests.get(url)
+            if response.status_code != 200:
+                print 'ERROR ANALYSIS: %s (%s)' % (response.text, params)
+                continue
             if not response.json()['value']:
                 print 'No alerts for %s' % url
+                continue
             else:
                 filename = ANALYSIS_FILENAME % ('forma', begin, end, iso)
                 with open(filename, 'wb') as fd:
                     for chunk in response.iter_content(chunk_size=10000):
                         fd.write(chunk)
                 url = API_DOWNLOAD_URL % ('forma', fmt, iso, begin, end)
-                print url
                 filename = FILE_NAME % ('forma', begin, end, iso, fmt)
-                print filename
                 response = requests.get(url)
+                if response.status_code != 200:
+                    print 'ERROR: %s' % response.text
+                    continue
                 with open(filename, 'wb') as fd:
                     for chunk in response.iter_content(chunk_size=10000):
                         fd.write(chunk)
+                print filename
         except Queue.Empty:
             queue_full = False
         except Exception, e:
-            print 'FAIL: %s (%s)' % (url, e)
+            print 'ERROR: %s (%s)' % (url, e)
+            return
 
 
 if __name__ == '__main__':
+    os.chdir('gcs')
+
     q = Queue.Queue()
     for params in forma_cache_params():
         q.put(params)
 
-    thread_count = 100
+    thread_count = 25
     for i in range(thread_count):
         t = threading.Thread(target=worker, args = (q,))
         t.start()
