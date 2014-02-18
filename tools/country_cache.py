@@ -7,6 +7,8 @@ import os
 import Queue
 import threading
 import urllib2
+import subprocess
+from subprocess import call
 
 
 FORMATS = ['shp', 'csv', 'kml', 'geojson', 'svg']
@@ -97,11 +99,12 @@ def worker(queue):
                 with open(filename, 'wb') as fd:
                     for chunk in response.iter_content(chunk_size=10000):
                         fd.write(chunk)
-                print 'Done: %s' % filename
+                path = os.path.abspath(filename)
+                print subprocess.check_output(['gsutil', 'cp', path, 'gs://gfw-apis-country'])
         except Queue.Empty:
             queue_full = False
         except Exception, e:
-            print 'ERROR: %s (%s)' % (url, e)
+            print 'ERROR: %s' % e
             return
 
 
@@ -112,7 +115,7 @@ if __name__ == '__main__':
     for params in forma_cache_params():
         q.put(params)
 
-    thread_count = 3
+    thread_count = 25
     for i in range(thread_count):
         t = threading.Thread(target=worker, args = (q,))
         t.start()
