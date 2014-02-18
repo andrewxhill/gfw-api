@@ -149,7 +149,6 @@ class StoriesApi(BaseApi):
         params['token'] = self._gen_token()
         result = stories.create(params)
         if result:
-            logging.info(result.content)
             story = json.loads(result.content)['rows'][0]
             story['media'] = json.loads(story['media'])
             self.response.set_status(201)
