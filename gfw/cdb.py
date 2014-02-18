@@ -17,8 +17,8 @@
 
 """This module supports executing CartoDB queries."""
 
-import logging
 import urllib
+
 from appengine_config import runtime_config
 from google.appengine.api import urlfetch
 
@@ -43,35 +43,26 @@ def get_format(media_type):
         return tokens[2].split('+')[0]
 
 
-def get_url(query, params, api_key):
+def get_url(query, params, auth=False):
     """Return CartoDB query URL for supplied params."""
     params['q'] = query
-    if api_key:
+    if auth:
         params['api_key'] = _get_api_key()
     return '%s?%s' % (ENDPOINT, urllib.urlencode(params))
 
 
-def get_body(query, params, api_key):
+def get_body(query, params, auth=False):
     """Return CartoDB payload body for supplied params."""
     params['q'] = query
-    if api_key:
+    if auth:
         params['api_key'] = _get_api_key()
     body = urllib.urlencode(params)
     return body
 
-def execute(query, params={}, api_key=False):
+
+def execute(query, params={}, auth=False):
     """Exectues supplied query on CartoDB and returns response body as JSON."""
-    logging.info('CARTODB QUERY %s' % query)
     rpc = urlfetch.create_rpc(deadline=60)
-    url = get_url(query, params, api_key)
-    payload = get_body(query, params, api_key)
+    payload = get_body(query, params, auth=auth)
     urlfetch.make_fetch_call(rpc, ENDPOINT, method='POST', payload=payload)
-    try:
-        result = rpc.get_result()
-        if result.status_code == 200:
-            return result.content
-    except urlfetch.DownloadError, e:
-        logging.error("CartoDB SQL API Error: %s %s" % (e, query))
-    except urlfetch.ResponseTooLargeError, e:
-        logging.error("CartoDB result too big: %s %s" % (e, url))
-        raise e
+    return rpc.get_result()
