@@ -89,7 +89,8 @@ class Cache():
             if entry:
                 return entry
         if dataset == 'forma':
-            return cls.forma(key, params)
+            if 'iso' in params:
+                return cls.forma(key, params)
 
 
 class AnalysisEntry(ndb.Model):
@@ -117,34 +118,39 @@ class Analysis(common.BaseApi):
     def post(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
+        logging.info('hi')
         bust = params.get('bust')
         if bust:
             params.pop('bust')
+        logging.info('ho')
 
-        try:
-            entry = Cache.get(rid, dataset, params, bust)
-            if entry:
-                self._send_response(entry.value)
+        # try:
+        entry = Cache.get(rid, dataset, params, bust)
+        logging.info('ENTRY %s' % entry)
+        if entry:
+            self._send_response(entry.value)
+        else:
+            response = _analyze(dataset, params)
+            if dataset == 'umd':
+                value = json.dumps(response)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
+            elif response.status_code == 200:
+                logging.info('CONTENT %s' % response.content)
+                result = _parse_analysis(dataset, response.content)
+                value = json.dumps(result)
+                logging.info('VALUE %s' % value)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
             else:
-                response = _analyze(dataset, params)
-                if dataset == 'umd':
-                    value = json.dumps(response)
-                    AnalysisEntry(id=rid, value=value).put()
-                    self._send_response(value)
-                elif response.status_code == 200:
-                    result = _parse_analysis(dataset, response.content)
-                    value = json.dumps(result)
-                    AnalysisEntry(id=rid, value=value).put()
-                    self._send_response(value)
-                else:
-                    raise Exception('CartoDB Failed (status=%s, content=%s)' %
-                                    (response.status_code, response.content))
-        except Exception, e:
-            name = e.__class__.__name__
-            msg = 'Error: Analyze %s (%s)' % (dataset, name)
-            monitor.log(self.request.url, msg, error=e,
-                        headers=self.request.headers)
-            self._send_error()
+                raise Exception('CartoDB Failed (status=%s, content=%s)' %
+                                (response.status_code, response.content))
+        # except Exception, e:
+        #     name = e.__class__.__name__
+        #     msg = 'Error: Analyze %s (%s)' % (dataset, name)
+        #     monitor.log(self.request.url, msg, error=e,
+        #                 headers=self.request.headers)
+        #     self._send_error()
 
 
 routes = [webapp2.Route(_ROUTE, handler=Analysis)]
