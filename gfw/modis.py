@@ -24,7 +24,7 @@ ANALYSIS = """SELECT count(*) AS total {select_geom}
 FROM modis_forest_change_copy m, world_countries c
 WHERE m.date = '{date}'::date
       AND m.country = c.name
-      AND c.iso3 ilike '{iso}'
+      AND c.iso3 = upper('{iso}')
 GROUP BY c.the_geom"""
 
 ANALYSIS_GEOM = """SELECT count(*) AS total {select_geom}
