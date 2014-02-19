@@ -118,15 +118,12 @@ class Analysis(common.BaseApi):
     def post(self, dataset):
         params = self._get_params()
         rid = self._get_id(params)
-        logging.info('hi')
         bust = params.get('bust')
         if bust:
             params.pop('bust')
-        logging.info('ho')
 
         # try:
         entry = Cache.get(rid, dataset, params, bust)
-        logging.info('ENTRY %s' % entry)
         if entry:
             self._send_response(entry.value)
         else:
@@ -136,10 +133,8 @@ class Analysis(common.BaseApi):
                 AnalysisEntry(id=rid, value=value).put()
                 self._send_response(value)
             elif response.status_code == 200:
-                logging.info('CONTENT %s' % response.content)
                 result = _parse_analysis(dataset, response.content)
                 value = json.dumps(result)
-                logging.info('VALUE %s' % value)
                 AnalysisEntry(id=rid, value=value).put()
                 self._send_response(value)
             else:

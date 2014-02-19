@@ -44,6 +44,10 @@ def _sum_range(data, begin, end):
             if (int(key) >= int(begin)) and (int(key) <= int(end))])
 
 
+def _get_umd_range(result, begin, end):
+    _sum_range(result.get('area'), begin, end)
+
+
 def _get_range(result, begin, end):
     loss_area = _sum_range(result.get('loss_area'), begin, end)
     gain_area = _sum_range(result.get('gain_area'), begin, end)
@@ -81,7 +85,8 @@ def _ee(urlparams, asset_id):
         .multiply(ee.Image.pixelArea()) \
         .reduceRegion(**reduce_args)
     area_results = area_stats.getInfo()
-    return dict(gain_area=area_results['gain'], loss_area=area_results['loss'])
+    logging.info(area_results)
+    return area_results
 
 
 def _loss_area(row):
@@ -111,10 +116,17 @@ def download(params):
 def analyze(params):
     geom = params.get('geom', None)
     iso = params.get('iso', None)
+    logging.info('hi')
     if geom:
+        logging.info('there')
         ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
         geom = json.loads(geom)
-        result = _ee(params, 'hansen_all')
+        gain = _ee(params, 'hansen_all')['gain']
+        loss_results = _ee(params, 'hansen_loss')
+        loss = _sum_range(loss_results, params.get('begin'), params.get('end'))
+        result = {}
+        result['gain'] = gain
+        result['loss'] = loss
         result['geom'] = geom
         result['begin'] = params['begin']
         result['end'] = params['end']
