@@ -29,9 +29,7 @@ from google.appengine.api import taskqueue
 def log(url, msg, error=None, headers={}):
     headers = dict([(k, v) for k, v in headers.iteritems()])
     params = dict(url=url, msg=msg, headers=json.dumps(headers))
-    if error:
-        error = '%s: %s' % (error.__class__.__name__, str(error))
-        params['error'] = error
+    params['error'] = error
     taskqueue.add(url='/monitor', params=params, queue_name="log")
 
 

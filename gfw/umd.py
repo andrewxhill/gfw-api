@@ -115,9 +115,7 @@ def download(params):
 def analyze(params):
     geom = params.get('geom', None)
     iso = params.get('iso', None)
-    logging.info('hi')
     if geom:
-        logging.info('there')
         ee.Initialize(config.EE_CREDENTIALS, config.EE_URL)
         geom = json.loads(geom)
         gain = _ee(params, 'hansen_all')['gain']
