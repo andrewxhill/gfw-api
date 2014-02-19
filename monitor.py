@@ -18,7 +18,6 @@
 import json
 import webapp2
 import logging
-import urllib
 
 from appengine_config import runtime_config
 
@@ -37,20 +36,15 @@ class Monitor(webapp2.RequestHandler):
     def post(self):
         params = ['url', 'msg', 'error', 'headers']
         url, msg, error, headers = map(self.request.get, params)
-        dev = runtime_config.get('IS_DEV')
         headers = json.loads(headers)
-        lat, lon = headers.get('X-Appengine-Citylatlong', '0,0').split(',')
-        point = '{"type": "Point", "coordinates": [%s, %s]}' % (lon, lat)
-        the_geom = "ST_SetSRID(ST_GeomFromGeoJSON('%s'), 4326)" % point
+        loc = headers.get('X-Appengine-Citylatlong', '0,0')
         vals = dict(
-            dev=dev,
-            error=error,
             url=url,
             msg=msg.replace("'", ''),
             country=headers.get('X-Appengine-Country'),
             region=headers.get('X-Appengine-Region'),
             city=headers.get('X-Appengine-City'),
-            the_geom=the_geom)
+            loc=loc)
         vals = json.dumps(vals, sort_keys=True, indent=4,
                           separators=(',', ': '))
         if error:
@@ -59,7 +53,7 @@ class Monitor(webapp2.RequestHandler):
                 sender='noreply@gfw-apis.appspotmail.com',
                 to='eightysteele+gfw-api-errors@gmail.com',
                 subject='[GFW API ERROR] %s' % msg,
-                body=vals)
+                body='Error: %s\n\n%s' % (error, vals))
         else:
             logging.info('MONITOR: %s' % vals)
 
