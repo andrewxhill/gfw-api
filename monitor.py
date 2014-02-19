@@ -46,8 +46,8 @@ class Monitor(webapp2.RequestHandler):
         the_geom = "ST_SetSRID(ST_GeomFromGeoJSON('%s'), 4326)" % point
         vals = dict(
             dev=dev,
-            error=error.replace("'", ''),
-            url=urllib.quote_plus(url),
+            error=error,
+            url=url,
             msg=msg.replace("'", ''),
             country=headers.get('X-Appengine-Country'),
             region=headers.get('X-Appengine-Region'),
@@ -56,7 +56,7 @@ class Monitor(webapp2.RequestHandler):
         vals = json.dumps(vals, sort_keys=True, indent=4,
                           separators=(',', ': '))
         if error:
-            logging.error('MONITOR: %s' % vals)
+            logging.error('MONITOR: %s' % error)
             mail.send_mail(
                 sender='noreply@gfw-apis.appspotmail.com',
                 to='eightysteele+gfw-api-errors@gmail.com',

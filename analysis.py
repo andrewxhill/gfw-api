@@ -19,7 +19,7 @@ import webapp2
 import monitor
 import common
 import json
-import logging
+import traceback
 
 from appengine_config import runtime_config
 
@@ -122,30 +122,37 @@ class Analysis(common.BaseApi):
         if bust:
             params.pop('bust')
 
-        try:
-            entry = Cache.get(rid, dataset, params, bust)
-            if entry:
-                self._send_response(entry.value)
-            else:
+        entry = Cache.get(rid, dataset, params, bust)
+        if entry:
+            self._send_response(entry.value)
+        else:
+            response = None
+            error = None
+            try:
                 response = _analyze(dataset, params)
+            except Exception, e:
+                error = e
+                name = error.__class__.__name__
+                trace = traceback.format_exc()
                 if dataset == 'umd':
-                    value = json.dumps(response)
-                    AnalysisEntry(id=rid, value=value).put()
-                    self._send_response(value)
-                elif response.status_code == 200:
-                    result = _parse_analysis(dataset, response.content)
-                    value = json.dumps(result)
-                    AnalysisEntry(id=rid, value=value).put()
-                    self._send_response(value)
+                    msg = 'Earth Engine analysis failure: %s: %s' % \
+                        (name, error)
                 else:
-                    raise Exception('CartoDB Failed (status=%s, content=%s)' %
-                                    (response.status_code, response.content))
-        except Exception, e:
-            name = e.__class__.__name__
-            msg = 'Error: Analyze %s (%s)' % (dataset, name)
-            monitor.log(self.request.url, msg, error=e,
-                        headers=self.request.headers)
-            self._send_error()
+                    msg = 'CartoDB %s analysis failure: %s: %s' % \
+                        (dataset, name, error)
+                monitor.log(self.request.url, msg, error=trace,
+                            headers=self.request.headers)
+                self._send_error()
+                return
+            if dataset == 'umd':
+                value = json.dumps(response)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
+            else:
+                result = _parse_analysis(dataset, response.content)
+                value = json.dumps(result)
+                AnalysisEntry(id=rid, value=value).put()
+                self._send_response(value)
 
 
 routes = [webapp2.Route(_ROUTE, handler=Analysis)]

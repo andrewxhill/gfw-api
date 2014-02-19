@@ -18,7 +18,7 @@
 import webapp2
 import monitor
 import common
-import logging
+import traceback
 
 from appengine_config import runtime_config
 
@@ -122,28 +122,27 @@ class Download(blobstore_handlers.BlobstoreDownloadHandler):
         rid = common._get_request_id(self.request, params)
         bust = params.get('bust')
 
-        try:
-            entry = Cache.get(rid, dataset, params, fmt, bust)
-            if entry and entry.blob_key:
-                self.send_blob(entry.blob_key)
-            elif entry and entry.cdb_url:
-                self._redirect(entry.cdb_url)
-            else:
+        entry = Cache.get(rid, dataset, params, fmt, bust)
+        if entry and entry.blob_key:
+            self.send_blob(entry.blob_key)
+        elif entry and entry.cdb_url:
+            self._redirect(entry.cdb_url)
+        else:
+            url = None
+            try:
                 url = _download(dataset, params)
-                response = urlfetch.fetch(url, method='HEAD', deadline=60)
-                if response.status_code == 200:
-                    DownloadEntry(id=rid, cdb_url=url).put()
-                    self._redirect(url)
-                else:
-                    raise Exception('CartoDB status=%s, content=%s' %
-                                    (response.status_code, response.content))
-        except Exception, e:
-            name = e.__class__.__name__
-            msg = 'Error: Download %s (%s)' % (dataset, name)
-            monitor.log(self.request.url, msg, error=e,
-                        headers=self.request.headers)
-            self._send_error()
-
+                urlfetch.fetch(url, method='HEAD', deadline=60)
+            except Exception, error:
+                name = error.__class__.__name__
+                trace = traceback.format_exc()
+                msg = 'CartoDB %s download failure: %s: %s - URL: %s' % \
+                    (dataset, name, error, url)
+                monitor.log(self.request.url, msg, error=trace,
+                            headers=self.request.headers)
+                self._send_error()
+                return
+            DownloadEntry(id=rid, cdb_url=url).put()
+            self._redirect(url)
 
 routes = [webapp2.Route(_ROUTE, handler=Download)]
 
