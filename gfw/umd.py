@@ -29,7 +29,7 @@ import copy
 from gfw import cdb
 
 SUM = """SELECT iso, sum(loss_gt_0) loss, avg(gain) gain
-         FROM umd_1
+         FROM umd
          WHERE year >= {begin} AND year <= {end} AND iso ilike '{iso}'
          GROUP BY iso"""
 
