@@ -62,7 +62,7 @@ def download(params):
         query = DOWNLOAD_GEOM.format(**params)
     else:
         query = DOWNLOAD.format(**params)
-    return cdb.execute(query, params)
+    return cdb.get_url(query, params)
 
 
 def analyze(params):

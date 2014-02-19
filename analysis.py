@@ -122,30 +122,30 @@ class Analysis(common.BaseApi):
         if bust:
             params.pop('bust')
 
-        # try:
-        entry = Cache.get(rid, dataset, params, bust)
-        if entry:
-            self._send_response(entry.value)
-        else:
-            response = _analyze(dataset, params)
-            if dataset == 'umd':
-                value = json.dumps(response)
-                AnalysisEntry(id=rid, value=value).put()
-                self._send_response(value)
-            elif response.status_code == 200:
-                result = _parse_analysis(dataset, response.content)
-                value = json.dumps(result)
-                AnalysisEntry(id=rid, value=value).put()
-                self._send_response(value)
+        try:
+            entry = Cache.get(rid, dataset, params, bust)
+            if entry:
+                self._send_response(entry.value)
             else:
-                raise Exception('CartoDB Failed (status=%s, content=%s)' %
-                                (response.status_code, response.content))
-        # except Exception, e:
-        #     name = e.__class__.__name__
-        #     msg = 'Error: Analyze %s (%s)' % (dataset, name)
-        #     monitor.log(self.request.url, msg, error=e,
-        #                 headers=self.request.headers)
-        #     self._send_error()
+                response = _analyze(dataset, params)
+                if dataset == 'umd':
+                    value = json.dumps(response)
+                    AnalysisEntry(id=rid, value=value).put()
+                    self._send_response(value)
+                elif response.status_code == 200:
+                    result = _parse_analysis(dataset, response.content)
+                    value = json.dumps(result)
+                    AnalysisEntry(id=rid, value=value).put()
+                    self._send_response(value)
+                else:
+                    raise Exception('CartoDB Failed (status=%s, content=%s)' %
+                                    (response.status_code, response.content))
+        except Exception, e:
+            name = e.__class__.__name__
+            msg = 'Error: Analyze %s (%s)' % (dataset, name)
+            monitor.log(self.request.url, msg, error=e,
+                        headers=self.request.headers)
+            self._send_error()
 
 
 routes = [webapp2.Route(_ROUTE, handler=Analysis)]
