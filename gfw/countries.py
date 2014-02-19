@@ -33,7 +33,7 @@ ALERTS_ALL_COUNT = """SELECT sum(alerts.count) AS alerts_count
 HAS_ALERTS = """SELECT COUNT(*)
   FROM cdm_latest
   WHERE date >= now() - INTERVAL '12 Months'
-  AND iso ilike '{iso}'"""
+  AND iso = upper('{iso}')"""
 
 
 GET_NO_ALERTS = GET = """SELECT countries.iso, countries.name, countries.enabled,
@@ -48,7 +48,7 @@ GET_NO_ALERTS = GET = """SELECT countries.iso, countries.name, countries.enabled
   countries.external_links, countries.dataset_link, countries.emissions,
   countries.carbon_stocks
   FROM gfw2_countries AS countries
-  WHERE iso ilike '{iso}'
+  WHERE iso = upper('{iso}')
   ORDER BY countries.name {order}"""
 
 
@@ -88,7 +88,7 @@ def get(params):
         params['order'] = ''
     if 'iso' in params:
         if has_alerts(params):  # Has forma alerts:
-            params['and'] = "AND iso ilike '%s'" % params['iso']
+            params['and'] = "AND iso = upper('%s')" % params['iso']
             params['join'] = 'RIGHT'
             query = GET.format(**params)
         else:  # No forma alerts:
