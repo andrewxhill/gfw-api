@@ -101,12 +101,11 @@ def _gain_area(row):
 
 def _cdb(params):
     query = SUM.format(**params)
-    logging.info(query)
     result = cdb.execute(query, {})
     if result:
         result = json.loads(result.content)['rows'][0]
-        return dict(iso=params.get('iso'), loss_area=result['loss'],
-                    gain_area=result['gain'])
+        return dict(iso=params.get('iso'), loss=result['loss'],
+                    gain=result['gain'])
 
 
 def download(params):
