@@ -27,7 +27,7 @@ ISO_SUB_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
 FROM
   (SELECT COUNT(*), iso, date
    FROM %s
-   WHERE iso ilike '{iso}'
+   WHERE iso = upper('{iso}')
          AND date <= now() - INTERVAL '1 Months'
    GROUP BY date, iso
    ORDER BY iso, date) AS alias""" % FORMA_TABLE
@@ -48,7 +48,7 @@ ISO_SQL = """SELECT SUM(count) as value, 'FORMA' as name, 'alerts' as unit,
 FROM
   (SELECT COUNT(*), iso, date
    FROM %s
-   WHERE iso ilike'{iso}'
+   WHERE iso = upper('{iso}')
          AND date >= '{begin}'
          AND date <= '{end}'
    GROUP BY date, iso
@@ -56,7 +56,7 @@ FROM
 
 ISO_GEOM_SQL = """SELECT *
    FROM %s
-   WHERE iso ilike'{iso}'
+   WHERE iso = upper('{iso}')
          AND date >= '{begin}'
          AND date <= '{end}'""" % FORMA_TABLE
 
@@ -123,7 +123,7 @@ ALERTS_COUNTRY = """SELECT countries.iso, countries.name,
       SELECT COUNT(*) AS count, iso
       FROM %s
       WHERE date >= now() - INTERVAL '12 MONTHS'
-      AND iso ilike '{iso}'
+      AND iso = upper('{iso}')
       GROUP BY iso)
   AS alerts ON alerts.iso = countries.iso""" % FORMA_TABLE
 
