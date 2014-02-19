@@ -161,7 +161,7 @@ Please note that this information is subject to the Global Forest Watch <a href=
             alert['aoi-vis'] = '<img src="%s">' % url
         else:
             alert['aoi'] = 'a country (%s)' % s['iso']
-            sql = "SELECT ST_AsGeoJSON(ST_ConvexHull(the_geom)) FROM world_countries where iso3 ilike '%s'" % s['iso']
+            sql = "SELECT ST_AsGeoJSON(ST_ConvexHull(the_geom)) FROM world_countries where iso3 = upper('%s')" % s['iso']
             response = cdb.execute(sql)
             if response.status_code == 200:
                 result = json.loads(response.content)
