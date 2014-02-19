@@ -100,7 +100,6 @@ class BaseApi(webapp2.RequestHandler):
 class StoriesApi(BaseApi):
 
     def _send_new_story_emails(self):
-        return
         story = self._get_params()
 
         # Email WRI:
