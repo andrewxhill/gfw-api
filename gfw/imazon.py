@@ -28,14 +28,14 @@ WHERE ST_ISvalid(the_geom)
   AND date <= '{end}'::date"""
 
 # Download within supplied GeoJSON:
-DOWNLOAD_GEOM = """SELECT ST_Intersection(imazon.the_geom,
-  ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326)) the_geom,
+DOWNLOAD_GEOM = """SELECT cartodb_id, the_geom,
   data_type disturbance, to_char(date, 'YYYY-MM-DD') date
   FROM imazon_clean2 imazon
   WHERE ST_SetSRID(ST_GeomFromGeoJSON('{geom}'),4326) && imazon.the_geom
   AND ST_ISvalid(imazon.the_geom)
   AND date >= '{begin}'::date
-  AND date <= '{end}'::date"""
+  AND date <= '{end}'::date
+  ORDER BY disturbance, date ASC"""
 
 ANALYSIS = """SELECT data_type, sum(ST_Area(the_geom_webmercator)) AS value,
 'Imazon' AS name, 'hectares' AS units
